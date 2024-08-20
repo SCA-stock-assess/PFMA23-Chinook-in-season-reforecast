@@ -38,16 +38,16 @@ strata_sums <-  interview_summary |>
   filter(
     # Interviews w/these comments are used to calculate CPUE
     asscd_txt %in% c("Adipose fin not chkd", "Complete Form", "Fish not seen for ID"), 
-    #!statsub %in% c("23L", "23F"), # Very little data is associated with these areas
-    str_detect(statsub, "^23[[:upper:]]")
+    str_detect(statsub, "^23[[:upper:]]|123(?=(T|R|P))") # 123 T, R, and P are the corridor
   ) |> # Remove offshore areas
-  # Combine subareas that were split in 2011
+  # Combine subareas that were split over the years
   mutate(
     statsub = case_when( 
-      statsub %in% c("23G", "23P", "23O") ~ "23O+P", # in 2011, 23G was split into 23O and 23P
-      statsub %in% c("23H", "23Q", "23N") ~ "23Q+N", # in 2011, 23H was split into 23Q and 23N
+      # in 2011, 23G was split into 23O and 23P (now 123P)
+      statsub %in% c("23G", "23P", "23O", "123P", "23L") ~ "23O+123P", 
+      # in 2011, 23H was split into 23Q and 23N (now 123T)
+      statsub %in% c("23H", "23Q", "23N", "123T") ~ "23Q+123T", 
       statsub == "23I" ~ "123R", # Changed in 2022
-      statsub == "23L" ~ "23K", # **** GUESS ***** revise once discovered
       TRUE ~ statsub
       )
   ) |>  
@@ -94,7 +94,7 @@ minimal_data <- strata_sums |>
 
 
 # Make a list of subarea combinations to group by
-combo_n <- seq.int(3,4) # set #s of subarea combos to try 
+combo_n <- seq.int(3,8) # set #s of subarea combos to try 
 # Start small (e.g. 3-4) to get script working smoothly
 # Will take a long time (45+min) to run for larger groups
 
@@ -258,7 +258,7 @@ creel_shp <- sf::st_read(here("Creel_Survey_Areas")) |>
 coastline <- read_sf(
   here(
     # Adjust file reference as needed based on where you 
-    #choose to save your downloaded file
+    # choose to save your downloaded file
     "GSHHS_shp", 
     "f", 
     "GSHHS_f_L1.shp" # This is the too-large file (157 MB)
@@ -278,21 +278,27 @@ bbox <- creel_shp |>
 
 # Clip shapefile to desired extent
 bs_land <- st_crop(coastline, bbox + c(-0.05, -0.05, 0.05, 0.05))
+# Adds some padding around the creel areas bounding box
 
 
 # Save data to plot r2 values as fill under creel subarea
 top_models <- nested_models |> 
-  filter(n_obs > 12) |> # A couple of models based on less data had strong relationships
-  slice_max(
-    order_by = r.squared,
-    n = 20
+  filter(
+    n_obs > 12, # A couple of models based on less data had strong relationships
+    period %in% c("83", "8384", "cum84", "84", "8491", "cum91")
   ) |> 
-  distinct(subareas, period, transformation, .keep_all = TRUE) |> 
+  slice_max(
+    by = period, # Take top models for each period
+    order_by = r.squared,
+    n = 5
+  ) |> 
+  # Throw out models where CPUE and transformation are repeated
+  distinct(subareas, period, .keep_all = TRUE) |> 
+  mutate(subarea = str_replace_all(subareas, "\\+", "_")) |> 
   separate(
-    subareas,
+    subarea,
     into = paste0("subarea", 1:4),
-    sep = "_",
-    remove = FALSE
+    sep = "_"
   ) |> 
   pivot_longer(
     matches("subarea\\d"),
@@ -300,11 +306,7 @@ top_models <- nested_models |>
     values_drop_na = TRUE
   ) |> 
   select(-name) |> 
-  mutate(
-    subarea = str_remove_all(subarea, "\\+N|\\+P") |> 
-      str_replace_all(c("23I" = "123R")),
-    model = paste(cpue, period, transformation, subareas)
-  ) |> 
+  mutate(model = paste(cpue, period, transformation, subareas)) |> 
   left_join(
     creel_shp,
     by = join_by(subarea == subareaid)
@@ -339,40 +341,49 @@ top_models <- nested_models |>
 
 
 # Plot data from top models on map
-bs_basemap +
-  facet_wrap(~model) +
-  geom_sf(
-    data = creel_shp,
-    fill = NA
-  ) +
-  geom_sf(
-    data = top_models,
-    aes(fill = r.squared)
-  ) +
-  scale_fill_viridis_c(option = "rocket") +
-  coord_sf(expand = FALSE)
+top_models %>% 
+  split(.$period) |> 
+  imap(
+    ~bs_basemap %+% expand_grid(
+      bs_land,
+      model = unique(.x$model)
+    ) +
+      facet_wrap(~model) +
+      geom_sf(
+        data = creel_shp,
+        fill = NA
+      ) +
+      geom_sf(
+        data = .x,
+        aes(fill = r.squared)
+      ) +
+      labs(title = .y) +
+      scale_fill_viridis_c(option = "rocket") +
+      coord_sf(expand = FALSE)
+  )
 
 
 # Plot top models all overlaid on top of each other to show prime areas
 (quasi_heatmap <- bs_basemap +
-  facet_wrap(~ period) +
-  geom_sf(
-    data = creel_shp,
-    fill = NA
-  ) +
-  geom_sf(
-    data = top_models,
-    fill = "red",
-    alpha = 0.1
-  ) +
-  geom_sf(fill = "grey50") +
-  geom_sf_label(
-    data = top_models,
-    aes(label = subarea)
-  ) +
-  ggspatial::annotation_scale(location = "br") +
-  coord_sf(expand = FALSE) +
-  labs(x = NULL, y = NULL)
+    facet_wrap(~ period) +
+    geom_sf(
+      data = creel_shp,
+      fill = NA
+    ) +
+    geom_sf(
+      data = top_models,
+      fill = "red",
+      alpha = 0.2
+    ) +
+    geom_sf(fill = "grey50") +
+    geom_sf_label(
+      data = top_models,
+      aes(label = subarea),
+      label.size = 0.1
+    ) +
+    ggspatial::annotation_scale(location = "br") +
+    coord_sf(expand = FALSE) +
+    labs(x = NULL, y = NULL) 
 )
 
 
@@ -383,8 +394,8 @@ ggsave(
     "plots",
     "R-PLOT_quasi_heatmap_of_best_model_subareas.png"
   ),
-  height = 4,
-  width = 8.5,
+  height = 8,
+  width = 13,
   units = "in"
 )
 
@@ -397,6 +408,11 @@ ggsave(
 top_models_pred <- top_models |> 
   distinct(subareas, period, cpue, transformation) |> 
   left_join(nested_models) |> 
+  slice_max(
+    by = period,
+    order_by = r.squared,
+    n = 1
+  ) |> 
   rowwise() |> 
   mutate(
     glance = list(glance(model)),
