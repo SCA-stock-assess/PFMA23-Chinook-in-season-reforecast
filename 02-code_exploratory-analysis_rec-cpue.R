@@ -246,8 +246,7 @@ nested_models |>
 # The Polygons used to generate the coastline in the plots below are
 # too large to host on GitHub. You will need to download the shapefiles
 # yourself first from https://www.ngdc.noaa.gov/mgg/shorelines/ and then store
-# them in your local repository. I have committed all folders, from the
-# GSHHG download, only the files are missing. 
+# them in your local repository. 
 
 
 # Load Shapefile with CREEL subareas
@@ -256,7 +255,15 @@ creel_shp <- sf::st_read(here("Creel_Survey_Areas")) |>
 
 
 # Download high resolution coastline data from GSHHS
-coastline <- read_sf(here("GSHHS_shp", "f", "GSHHS_f_L1.shp")) |> # This is the too-large file
+coastline <- read_sf(
+  here(
+    # Adjust file reference as needed based on where you 
+    #choose to save your downloaded file
+    "GSHHS_shp", 
+    "f", 
+    "GSHHS_f_L1.shp" # This is the too-large file (157 MB)
+    )
+  ) |> 
   st_transform(crs = st_crs(creel_shp))
 
 
