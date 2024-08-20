@@ -463,7 +463,7 @@ top_models_pred <- top_models |>
 
 
 # Make plots of the predicted versus observed values
-list(
+(best_fits <- list(
   observed_data = pull(top_models_pred, model_frame),
   pred_data = pull(top_models_pred, pred_frame),
   model_name = pull(top_models_pred, model_name),
@@ -492,7 +492,7 @@ list(
         hjust = 0,
         vjust = 1,
         parse = TRUE,
-        size = 5
+        size = 4
       ) +
       scale_y_continuous(
         limits = c(0, max(..2$upr)),
@@ -508,10 +508,30 @@ list(
       theme(
         plot.tag.location = "panel",
         plot.tag.position = "topleft",
-        plot.tag = element_text(margin = margin(l = 1, t = 1, unit = "lines"))
+        plot.tag = element_text(
+          margin = margin(l = 1, t = 1, unit = "lines"),
+          size = 15
+        )
       )
-  )
+  ) |> 
+    set_names(nm = unique(top_models_pred$period))
+)
 
+
+# Save plotted best fits
+best_fits |> 
+  iwalk(
+    ~ggsave(
+      plot = .x,
+      filename = here(
+        "plots",
+        paste0("R-PLOT_obs_vs_pred_wks", .y, "_best_fit.png")
+      ),
+      height = 5.5,
+      width = 10,
+      units = "in"
+    )
+  )
 
 
 
