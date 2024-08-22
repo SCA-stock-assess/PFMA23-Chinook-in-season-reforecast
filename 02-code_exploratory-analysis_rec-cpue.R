@@ -34,6 +34,7 @@ bs_cn <- read_xlsx(
   
 
 # Group data by strata and calculate CPUEs
+# Note: need to get % RCH for Barkley corridor areas for past years
 strata_sums <-  interview_summary |> 
   filter(
     # Interviews w/these comments are used to calculate CPUE
@@ -52,7 +53,7 @@ strata_sums <-  interview_summary |>
       )
   ) |>  
   summarise(
-    .by = c(year, statsub, sw_2023),
+    .by = c(year, statsub, sw),
     across(c(cn_all_k, rch_cn_k), sum),
     boat_trips = n()
   ) |> 
@@ -60,10 +61,10 @@ strata_sums <-  interview_summary |>
   left_join(select(.data = bs_cn, year, Somass_term_adult_return)) |> 
   rename("return" = "Somass_term_adult_return") |> 
   # Keep only the mid-Aug to mid-Sept stat weeks
-  filter(sw_2023 %in% c(82, 83, 84, 91, 92)) |> 
+  filter(sw %in% c(82, 83, 84, 91, 92)) |> 
   pivot_longer(cols = cn_all_k:boat_trips) |> 
   pivot_wider(
-    names_from = sw_2023,
+    names_from = sw,
     values_from = value
   ) |> 
   rowwise() |> 
@@ -90,11 +91,11 @@ strata_sums <-  interview_summary |>
 
 # Minimalist version of the data
 minimal_data <- strata_sums |> 
-  filter(!if_any(c(return, cn_all_k, rch_cn_k, boat_trips), is.na))
+  filter(!if_any(c(return, cn_all_k, boat_trips), is.na))
 
 
 # Make a list of subarea combinations to group by
-combo_n <- seq.int(3,8) # set #s of subarea combos to try 
+combo_n <- seq.int(3,4) # set #s of subarea combos to try 
 # Start small (e.g. 3-4) to get script working smoothly
 # Will take a long time (45+min) to run for larger groups
 
@@ -109,108 +110,108 @@ subarea_combos <- list(unique(strata_sums$statsub)) |>
 
 
 # Make a nested dataframe with CPUE summarized across different area groups
-  nested_data <- subarea_combos |> 
-    enframe(name = "subareas") |> 
-    mutate(
-      subareas = map(
-        value, 
-        ~ paste(.x, collapse = "_")
+nested_data <- subarea_combos |> 
+  enframe(name = "subareas") |> 
+  mutate(
+    subareas = map(
+      value, 
+      ~ paste(.x, collapse = "_")
+    ) |> 
+      unlist()
+  ) |> 
+  expand_grid(period = unique(minimal_data$period)) |> 
+  mutate(
+    data = map2(
+      .x = value,
+      .y = period,
+      ~ filter(
+        .data = minimal_data,
+        statsub %in% .x,
+        period == .y
       ) |> 
-        unlist()
-    ) |> 
-    expand_grid(period = unique(minimal_data$period)) |> 
-    mutate(
-      data = map2(
-        .x = value,
-        .y = period,
-        ~ filter(
-          .data = minimal_data,
-          statsub %in% .x,
-          period == .y
+        summarize(
+          .by = c(year, return),
+          across(c(cn_all_k, rch_cn_k, boat_trips), sum)
         ) |> 
-          summarize(
-            .by = c(year, return),
-            across(c(cn_all_k, rch_cn_k, boat_trips), ~sum(.x, na.rm = TRUE))
-          ) |> 
-          mutate(cpue = cn_all_k / boat_trips),
-        .progress = "Filter and summarize:"
-      ),
-      rch_data = map(
-        .x = data,
-        ~ mutate(.x, cpue = rch_cn_k / boat_trips),
-        .progress = "Get RCH CPUEs:"
-      ),
-      across(
-        contains("data"),
-        ~ map(
-          .x,
-          ~ select(.x, year, return, cpue),
-          .progress = "Trim columns:"
-        )
+        mutate(cpue = cn_all_k / boat_trips),
+      .progress = "Filter and summarize:"
+    ),
+    rch_data = map(
+      .x = data,
+      ~ mutate(.x, cpue = rch_cn_k / boat_trips),
+      .progress = "Get RCH CPUEs:"
+    ),
+    across(
+      contains("data"),
+      ~ map(
+        .x,
+        ~ select(.x, year, return, cpue),
+        .progress = "Trim columns:"
       )
-    ) |> 
-    pivot_longer(
-      cols = contains("data"),
-      names_to = "cpue",
-      values_to = "data"
-    ) |> 
-    rowwise() |> 
-    mutate(
-      cpue = if_else(str_detect(cpue, "rch"), "rch", "ttl"),
-      n_obs = nrow(data)
-    ) |> 
-    ungroup() |> 
-    filter(n_obs > 9)
-  
+    )
+  ) |> 
+  pivot_longer(
+    cols = contains("data"),
+    names_to = "cpue",
+    values_to = "data"
+  ) |> 
+  rowwise() |> 
+  mutate(
+    cpue = if_else(str_detect(cpue, "rch"), "rch", "ttl"),
+    n_obs = nrow(subset(data, !is.na(cpue)))
+  ) |> 
+  ungroup() |> 
+  filter(n_obs > 9)
+
 
 # Fit models to the data with various transformations
-  nested_models <- nested_data |> 
-    select(-value) |> 
-    mutate(
-      mod_lin = map(
-        .x = data,
-        ~ lm(
-          return ~ cpue,
-          data = .x
-        ),
-        .progress = "Fitting linear models:"
+nested_models <- nested_data |> 
+  select(-value) |> 
+  mutate(
+    mod_lin = map(
+      .x = data,
+      ~ lm(
+        return ~ cpue,
+        data = .x
       ),
-      mod_log = map(
-        .x = data,
-        ~ lm(
-          log(return) ~ cpue,
-          data = .x
-        ),
-        .progress = "Fitting log models:"
+      .progress = "Fitting linear models:"
+    ),
+    mod_log = map(
+      .x = data,
+      ~ lm(
+        log(return) ~ cpue,
+        data = .x
       ),
-      mod_loglog = map(
-        .x = data,
-        ~ lm(
-          log(return) ~ log(cpue+0.0001),
-          data = .x
-        ),
-        .progress = "Fitting log-log models:"
+      .progress = "Fitting log models:"
+    ),
+    mod_loglog = map(
+      .x = data,
+      ~ lm(
+        log(return) ~ log(cpue+0.0001),
+        data = .x
       ),
-      mod_loglin = map(
-        .x = data,
-        ~ lm(
-          return ~ log(cpue+0.0001),
-          data = .x
-        ),
-        .progress = "Fitting linear-log models:"
+      .progress = "Fitting log-log models:"
+    ),
+    mod_loglin = map(
+      .x = data,
+      ~ lm(
+        return ~ log(cpue+0.0001),
+        data = .x
       ),
-      .keep = "unused" # drop the "data" column
-    ) |> 
-    pivot_longer(
-      cols = contains("mod"),
-      names_to = "transformation",
-      names_prefix = "mod_",
-      values_to = "model"
-    ) |> 
-    rowwise() |> 
-    mutate(r.squared = summary(model)$r.squared) |> 
-    ungroup()
-  
+      .progress = "Fitting linear-log models:"
+    ),
+    .keep = "unused" # drop the "data" column
+  ) |> 
+  pivot_longer(
+    cols = contains("mod"),
+    names_to = "transformation",
+    names_prefix = "mod_",
+    values_to = "model"
+  ) |> 
+  rowwise() |> 
+  mutate(r.squared = summary(model)$r.squared) |> 
+  ungroup()
+
 
 # Have a look at the distribution of R2 values
 nested_models |> 
@@ -254,7 +255,7 @@ creel_shp <- sf::st_read(here("Creel_Survey_Areas")) |>
   filter(STATAREA == 23) # Keep only PFMA 23
 
 
-# Download high resolution coastline data from GSHHS
+# High resolution coastline data from GSHHS
 coastline <- read_sf(
   here(
     # Adjust file reference as needed based on where you 
@@ -285,7 +286,7 @@ bs_land <- st_crop(coastline, bbox + c(-0.05, -0.05, 0.05, 0.05))
 top_models <- nested_models |> 
   filter(
     n_obs > 12, # A couple of models based on less data had strong relationships
-    period %in% c("83", "8384", "cum84", "84", "8491", "cum91")
+    str_detect(period, "83|84|91")
   ) |> 
   slice_max(
     by = period, # Take top models for each period
@@ -365,7 +366,7 @@ top_models %>%
 
 # Plot top models all overlaid on top of each other to show prime areas
 (quasi_heatmap <- bs_basemap +
-    facet_wrap(~ period) +
+    facet_wrap(~ period, nrow = 2) +
     geom_sf(
       data = creel_shp,
       fill = NA
@@ -394,7 +395,7 @@ ggsave(
     "plots",
     "R-PLOT_quasi_heatmap_of_best_model_subareas.png"
   ),
-  height = 8,
+  height = 7,
   width = 13,
   units = "in"
 )
