@@ -91,7 +91,6 @@ cpue <- read_excel(
 
 # Exploratory analysis (q.v. here("plots")) tells us the best model for 
 # Week 83 is the rch loglog from subareas 23J, 23C, and 23E
-# heat map also suggests 123R is pretty good so I'll throw that one in too
 
 
 # Subset to data for wk83 relationship
@@ -119,6 +118,13 @@ wk83_data |>
   stat_poly_eq() +
   scale_y_continuous(trans = "log") +
   scale_x_continuous(trans = "log")
+
+
+# Percent rank score for current year value
+wk83_data |> 
+  mutate(rank = percent_rank(rch_cpue)) |> 
+  filter(year == curr_year) |> 
+  pull(rank)
   
 
 # Fit the model
@@ -140,7 +146,7 @@ wk83_pred <- data.frame(
   ) %>%
   cbind(
     .,
-    predict(wk83_mod, ., interval = "pred")
+    predict(wk83_mod, ., interval = "pred", level = 0.75)
   ) |> 
   mutate(across(fit:upr, exp))
 
@@ -179,7 +185,7 @@ wk83_pred <- data.frame(
   ) +
   scale_y_continuous(
     labels = scales::comma,
-    limits = c(0, max(wk83_pred$upr)),
+    limits = c(0, max(wk83_pred$upr, wk83_data$return, na.rm = TRUE)),
     expand = expansion(mult = c(0, 0.05))
   ) +
   labs(
@@ -187,6 +193,7 @@ wk83_pred <- data.frame(
     y = "Somass Chinook return"
   )
 )
+
 
 # Save the plot with predictions
 ggsave(
@@ -196,3 +203,5 @@ ggsave(
   width = 8,
   units = "in"
 )
+
+
