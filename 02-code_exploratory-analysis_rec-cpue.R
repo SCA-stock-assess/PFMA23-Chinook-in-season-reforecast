@@ -2,7 +2,7 @@
 
 pkgs <- c(
   "tidyverse","readxl","ggridges","here",
-  "sf", "broom"
+  "sf", "broom", "ggspatial"
 )
 #install.packages(pkgs)
 
@@ -95,7 +95,7 @@ minimal_data <- strata_sums |>
 
 
 # Make a list of subarea combinations to group by
-combo_n <- seq.int(3,4) # set #s of subarea combos to try 
+combo_n <- seq.int(3,8) # set #s of subarea combos to try 
 # Start small (e.g. 3-4) to get script working smoothly
 # Will take a long time (45+min) to run for larger groups
 
@@ -255,30 +255,34 @@ creel_shp <- sf::st_read(here("Creel_Survey_Areas")) |>
   filter(STATAREA == 23) # Keep only PFMA 23
 
 
-# High resolution coastline data from GSHHS
+# High resolution coastline data from Freshwater Atlas
 coastline <- read_sf(
   here(
-    # Adjust file reference as needed based on where you 
-    # choose to save your downloaded file
-    "GSHHS_shp", 
-    "f", 
-    "GSHHS_f_L1.shp" # This is the too-large file (157 MB)
+    "FWA_COASTLINES_SP", 
+    "FWCSTLNSSP_line.shp" # This is the too-large file (157 MB)
     )
   ) |> 
-  st_transform(crs = st_crs(creel_shp))
+  st_transform(crs = st_crs(creel_shp)) |> 
+  # Constrain data to include only Van Isle watersheds
+  filter(
+    WTRSHDGRPC %in% c(
+      "NEVI", "NIMP", "COMX", "TAHS", "COWN", "VICT", 
+      "SANJ", "PARK", "ALBN", "CLAY", "GOLD", "BRKS",
+      "TSIT", "HOLB", "CAMB", "SALM"
+    )
+  ) |> 
+  # Unite all the line ends to form a polygon for the whole of Vancouver Island
+  st_union() |> 
+  st_polygonize()
 
 
-# Switch off spherical geometry for easier cropping
-sf_use_s2(FALSE)
-
-
-# Stipulate bounding box with small buffer
+# Stipulate bounding box based on creel areas shapefile
 bbox <- creel_shp |> 
   st_bbox()
 
 
-# Clip shapefile to desired extent
-bs_land <- st_crop(coastline, bbox + c(-0.05, -0.05, 0.05, 0.05))
+# Clip coastline to desired extent
+bs_land <- st_crop(coastline, bbox)
 # Adds some padding around the creel areas bounding box
 
 
@@ -317,26 +321,32 @@ top_models <- nested_models |>
 # Create basemap
 (bs_basemap <- bs_land |> 
     expand_grid(model = unique(top_models$model)) |> 
+    separate(
+      model,
+      c("cpue", "period", "transformation", "subareas"),
+      sep = " ",
+      remove = FALSE
+    ) |> 
     ggplot(aes(geometry = geometry)) +
-    geom_sf(data = st_as_sfc(bbox), fill = "lightblue") +
-    #geom_sf(data = creel_shp) +
-    geom_sf(fill = "grey50") +
+    geom_sf(
+      aes(geometry = bs_land), 
+      fill = "grey50"
+    ) +
     ggspatial::annotation_scale(location = "br") +
     ggspatial::annotation_north_arrow(
-      height = unit(2, "lines"),
-      width = unit(2, "lines")
+      style = ggspatial::north_arrow_nautical(),
+      height = unit(3, "lines"),
+      width = unit(3, "lines")
     ) +
     coord_sf(
-      xlim = bbox[c(1,3)],
-      ylim = bbox[c(2,4)],
-      expand = FALSE
+      expand = FALSE, 
+      crs = st_crs(creel_shp)
     ) +
     scale_y_continuous(breaks = c(48.8, 49.0, 49.2)) +
     scale_x_continuous(breaks = c(-125.0, -125.5)) +
     theme(
-      panel.background = element_rect(fill = NA),
-      panel.ontop = TRUE,
-      panel.grid = element_line(linewidth = 0.1)
+      panel.background = element_rect(fill = "lightblue1"),
+      panel.grid = element_blank()
     )
 )  
 
@@ -376,13 +386,11 @@ top_models %>%
       fill = "red",
       alpha = 0.2
     ) +
-    geom_sf(fill = "grey50") +
     geom_sf_label(
       data = top_models,
       aes(label = subarea),
       label.size = 0.1
     ) +
-    ggspatial::annotation_scale(location = "br") +
     coord_sf(expand = FALSE) +
     labs(x = NULL, y = NULL) 
 )
