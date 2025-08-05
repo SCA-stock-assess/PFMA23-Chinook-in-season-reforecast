@@ -12,7 +12,7 @@ library(janitor)
 library(ggpmisc)
 
 
-curr_year <- 2025
+curr_year <- 2024
 
 
 # Load data ---------------------------------------------------------------
@@ -85,7 +85,6 @@ cpue <- read_excel(
   )
 
 
-
 # Week 83 model -----------------------------------------------------------
 
 
@@ -107,11 +106,11 @@ wk83_data <- cpue |>
   mutate(
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
-  )
-
+  )|> 
+  filter(rch_cpue > 0) 
 
 # Plot the relationship (should be R^2 of ~0.74)
-wk83_data |> 
+wk83_data |>  
   ggplot(aes(x = rch_cpue+1e-4, y = return)) +
   geom_point() +
   geom_smooth(method = "lm") +
