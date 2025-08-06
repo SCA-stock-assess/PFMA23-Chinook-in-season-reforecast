@@ -10,6 +10,7 @@ library(here)
 library(readxl)
 library(janitor)
 library(ggpmisc)
+library(MLmetrics)
 
 
 curr_year <- 2024
@@ -128,7 +129,9 @@ wk83_data |>
 
 # Fit the model
 wk83_mod <- lm(log(return) ~ log(rch_cpue+1e-4), data = wk83_data)
+#MAPE(wk83_mod$fitted.values, Wk83_data$return) #actual = y in data points
 
+wk83_mod$model
 
 # Model predictions
 wk83_pred <- data.frame(
@@ -140,7 +143,7 @@ wk83_pred <- data.frame(
 ) |> 
   bind_rows(
     wk83_data |> 
-      filter(year == curr_year) |> 
+      #filter(year == curr_year) |> 
       select(year, rch_cpue)
   ) %>%
   cbind(
