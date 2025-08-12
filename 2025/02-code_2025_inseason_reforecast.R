@@ -108,7 +108,10 @@ wk83_data <- cpue |>
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
   )|> 
-  filter(rch_cpue > 0) 
+  filter(rch_cpue > 0) |> # took out 0 values of CPUE. This inflates the R^2. 
+  # In general if all subareas had 0 CPUE then it is either an anomoly, or
+  # the particular stat areas might not be the best to use. 
+  na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
 
 # Plot the relationship (should be R^2 of ~0.74)
 wk83_data |>  
@@ -129,10 +132,53 @@ wk83_data |>
 
 # Fit the model
 wk83_mod <- lm(log(return) ~ log(rch_cpue+1e-4), data = wk83_data)
-#MAPE(wk83_mod$fitted.values, Wk83_data$return) #actual = y in data points
+
+pred_df <- predict(wk83_mod, interval = "prediction") |>
+  as.data.frame() |>
+  mutate(across(everything(), exp))  # back-transform from log
+
+wk83_df <- cbind(wk83_data, pred_df)
+
+# Calculate MAPE
+MAPE(wk83_df$fit, wk83_df$return)
+
+# Extract the year from the data used in the model
+model_data <- model.frame(wk83_mod) # this doesn't seem to do anything
+model_d <- wk83_mod$model
+
+pred_df <- pred_df |>
+  mutate(year = model_data$year)
+
+pred_df <- pred_df |>
+  mutate(actual = model_data$return)
+
+ggplot(pred_df, aes(x = factor(year))) +
+  geom_col(aes(y = actual), fill = "steelblue", alpha = 0.6) +
+  geom_point(aes(y = fit), color = "darkred", size = 3) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2, color = "darkred") +
+  labs(
+    x = "Year",
+    y = "Return",
+    title = "Actual vs Forecasted Returns",
+    subtitle = "Bars = Actual | Points & Lines = Forecast with Prediction Interval"
+  ) +
+  theme_minimal()
+
+
+# Get the fitted values on the original (non-log) scale Note this doesn't work because some values are dropped 
+fitted_returns <- exp(fitted(wk83_mod))
+
+# Calculate MAPE
+MAPE(fitted_returns, wk83_data$return)
+
+
+#MAPE(wk83_mod$fitted.values, wk83_data$return) #actual = y in data points
 
 wk83_mod$model
 
+
+
+# Previous code
 # Model predictions
 wk83_pred <- data.frame(
   rch_cpue = seq(
