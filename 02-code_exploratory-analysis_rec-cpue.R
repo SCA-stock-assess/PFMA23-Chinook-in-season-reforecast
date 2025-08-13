@@ -97,7 +97,9 @@ minimal_data <- strata_sums |>
 #show what variables have missing data
 miss_var_summary(minimal_data)
 
-#show what varibables in what stat weeks have cpue == 0
+#show what variables in what stat weeks have cpue == 0
+#while 0 CPUE is valid, having a lot of zeros in an area or time perod 
+#might mean it isn't good for our regression. 
 minimal_data |> 
   ggplot(aes(x = period, y = statsub, size = boat_trips/10, color = (rch_cn_k == 0))) +
   geom_point(alpha = 0.3) +
