@@ -248,7 +248,7 @@ ggsave(
 wk83_data <- cpue |> 
   filter(
     period == "83",
-    statsub %in% c("23A", "23D", "23J", "23K", "23M"),
+    statsub %in% c("23D", "23J", "23K"),#"23D", "23J", "23K", "23M"),
     !if_any(c(cn_all_k, boat_trips), is.na)
   ) |> 
   summarize(
@@ -259,7 +259,7 @@ wk83_data <- cpue |>
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
   )|> 
-  filter(rch_cpue > 0.1) |> # took out values of CPUE close to 0. This inflates the R^2. 
+  filter(rch_cpue > 0.05) |> # took out values of CPUE close to 0. This inflates the R^2. 
   # In general if all subareas had 0 CPUE then it is either an anomoly, or
   # the particular stat areas might not be the best to use. 
   na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
