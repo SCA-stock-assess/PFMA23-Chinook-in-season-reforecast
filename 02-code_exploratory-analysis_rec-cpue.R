@@ -92,28 +92,36 @@ strata_sums <-  interview_summary |>
 
 # Minimalist version of the data
 minimal_data <- strata_sums |> 
-  filter(!if_any(c(return, cn_all_k, rch_cn_k, boat_trips), is.na)) # now removes nas from rch_cn_k
+  filter(!if_any(c(return, cn_all_k, , boat_trips), is.na)) # rch_cn_k, boat_trips), is.na)) # now removes nas from rch_cn_k
 
 #show what variables have missing data
 miss_var_summary(minimal_data)
+
+minimal_data <- minimal_data |> 
+  filter(year>2021) 
 
 #show what variables in what stat weeks have cpue == 0
 #while 0 CPUE is valid, having a lot of zeros in an area or time perod 
 #might mean it isn't good for our regression. 
 minimal_data |> 
-  ggplot(aes(x = period, y = statsub, size = boat_trips/10, color = (rch_cn_k == 0))) +
+  ggplot(aes(x = period, y = statsub, size = boat_trips, color = (rch_cn_k == 0))) +
   geom_point(alpha = 0.3) +
   facet_wrap(~(rch_cn_k == 0))
 
 #Based on the figure. We want area/times where 
 # the boat count is higher, 
-# the darkness of the blue == 0 is more opaque . 
+# the darkness of the blue == 0 is more opaque.
+
+#look at last 3 years
+minimal_data |>
+  
 
 # so remove data from september (91, 92 cum91, cum 92)
 # choose 23A, 23C, 23J, 23K, 23M
 minimal_data <- minimal_data|>
   filter(!str_detect(period, "[9,2]"), # remove (91, 92 cum91, cum 92)
          str_detect(statsub, "[A,D,J,K,M]")) # # choose 23A, 23C, 23J, 23K, 23M
+
 
 # Make a list of subarea combinations to group by
 combo_n <- seq.int(3,8) # set #s of subarea combos to try 
