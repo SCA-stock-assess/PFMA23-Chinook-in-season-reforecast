@@ -133,6 +133,7 @@ wk83_data |>
 # Fit the model
 wk83_mod <- lm(log(return) ~ log(rch_cpue+1e-4), data = wk83_data)
 
+#Begining of code to evaluated model efficacy. 
 pred_df <- predict(wk83_mod, interval = "prediction") |>
   as.data.frame() |>
   mutate(across(everything(), exp))  # back-transform from log
@@ -140,20 +141,17 @@ pred_df <- predict(wk83_mod, interval = "prediction") |>
 wk83_df <- cbind(wk83_data, pred_df)
 
 # Calculate MAPE
-MAPE(wk83_df$fit, wk83_df$return)
+MAPE(wk83_df$fit, wk83_df$return) 
+#data up to 2023 gives a MAPE of 0.2808277 This is worse than the preseason forecast.
+#Try to find a better inseason forecast OR use the preseason forecast. 
 
-# Extract the year from the data used in the model
-model_data <- model.frame(wk83_mod) # this doesn't seem to do anything
-model_d <- wk83_mod$model
-
-pred_df <- pred_df |>
-  mutate(year = model_data$year)
-
+# 
 pred_df <- pred_df |>
   mutate(actual = model_data$return)
 
+#Note this figure doesn't work
 ggplot(pred_df, aes(x = factor(year))) +
-  geom_col(aes(y = actual), fill = "steelblue", alpha = 0.6) +
+  geom_col(aes(y = return), fill = "steelblue", alpha = 0.6) +
   geom_point(aes(y = fit), color = "darkred", size = 3) +
   geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2, color = "darkred") +
   labs(
@@ -164,21 +162,8 @@ ggplot(pred_df, aes(x = factor(year))) +
   ) +
   theme_minimal()
 
+# End of code to determine model efficacy. 
 
-# Get the fitted values on the original (non-log) scale Note this doesn't work because some values are dropped 
-fitted_returns <- exp(fitted(wk83_mod))
-
-# Calculate MAPE
-MAPE(fitted_returns, wk83_data$return)
-
-
-#MAPE(wk83_mod$fitted.values, wk83_data$return) #actual = y in data points
-
-wk83_mod$model
-
-
-
-# Previous code
 # Model predictions
 wk83_pred <- data.frame(
   rch_cpue = seq(
@@ -251,5 +236,158 @@ ggsave(
   width = 8,
   units = "in"
 )
+
+# New (2025)Week 83 model -----------------------------------------------------------
+
+
+# Exploratory analysis (q.v. here("plots")) tells us the best model for 
+# Week 83 is the rch loglog from subareas 23J, 23C, and 23E
+
+
+# Subset to data for wk83 relationship
+wk83_data <- cpue |> 
+  filter(
+    period == "83",
+    statsub %in% c("23A", "23D", "23J", "23K", "23M"),
+    !if_any(c(cn_all_k, boat_trips), is.na)
+  ) |> 
+  summarize(
+    .by = c(year, return),
+    across(cn_all_k:boat_trips, sum)
+  ) |> 
+  mutate(
+    ttl_cpue = cn_all_k/boat_trips,
+    rch_cpue = rch_cn_k/boat_trips
+  )|> 
+  filter(rch_cpue > 0.1) |> # took out values of CPUE close to 0. This inflates the R^2. 
+  # In general if all subareas had 0 CPUE then it is either an anomoly, or
+  # the particular stat areas might not be the best to use. 
+  na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
+
+# Plot the relationship (should be R^2 of ~0.22)
+wk83_data |>  
+  ggplot(aes(x = rch_cpue, y = return)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_poly_eq() #+
+  #scale_y_continuous(trans = "log") +
+  #scale_x_continuous(trans = "log")
+
+
+# Percent rank score for current year value
+wk83_data |> 
+  mutate(rank = percent_rank(rch_cpue)) |> 
+  filter(year == curr_year) |> 
+  pull(rank)
+
+
+# Fit the model
+wk83_mod <- lm(return ~ rch_cpue, data = wk83_data)
+
+#Beginning of code to evaluated model efficacy. 
+pred_df <- predict(wk83_mod, interval = "prediction") |>
+  as.data.frame() 
+  #mutate(across(everything(), exp))  # back-transform from log
+
+wk83_df <- cbind(wk83_data, pred_df)
+
+# Calculate MAPE
+MAPE(wk83_df$fit, wk83_df$return) 
+#data up to 2023 gives a MAPE of 0.4222564 This is worse than the preseason forecast.
+#Try to find a better inseason forecast OR use the preseason forecast. 
+
+# 
+pred_df <- pred_df |>
+  mutate(actual = model_data$return)
+
+#Note this figure doesn't work
+ggplot(pred_df, aes(x = factor(year))) +
+  geom_col(aes(y = return), fill = "steelblue", alpha = 0.6) +
+  geom_point(aes(y = fit), color = "darkred", size = 3) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2, color = "darkred") +
+  labs(
+    x = "Year",
+    y = "Return",
+    title = "Actual vs Forecasted Returns",
+    subtitle = "Bars = Actual | Points & Lines = Forecast with Prediction Interval"
+  ) +
+  theme_minimal()
+
+# End of code to determine model efficacy. 
+
+# Model predictions
+wk83_pred <- data.frame(
+  rch_cpue = seq(
+    min(wk83_data$rch_cpue, na.rm = TRUE), 
+    max(wk83_data$rch_cpue, na.rm = TRUE), 
+    length.out = 100
+  )
+) |> 
+  bind_rows(
+    wk83_data |> 
+      #filter(year == curr_year) |> 
+      select(year, rch_cpue)
+  ) %>%
+  cbind(
+    .,
+    predict(wk83_mod, ., interval = "pred", level = 0.75)
+  ) |> 
+  mutate(across(fit:upr, exp))
+
+
+# Plot predictions
+(wk83_plot <- wk83_pred |> 
+    filter(is.na(year)) |> 
+    ggplot(aes(x = rch_cpue, y = fit)) +
+    geom_ribbon(
+      aes(ymin = lwr, ymax = upr),
+      fill = "blue",
+      alpha = 0.3
+    ) +
+    geom_line(colour = "blue") +
+    geom_point(
+      data = wk83_data,
+      aes(y = return)
+    ) +
+    geom_pointrange(
+      data = filter(wk83_pred, year == curr_year),
+      aes(ymin = lwr, ymax = upr),
+      colour = "red"
+    ) +
+    annotate(
+      "text",
+      label = paste(
+        "~italic(R)^2==",
+        round(summary(wk83_mod)$adj.r.squared, 2)
+      ),
+      parse = TRUE,
+      x = min(wk83_pred$rch_cpue),
+      y = max(wk83_pred$upr),
+      hjust = 0,
+      vjust = 1,
+      size = 6
+    ) +
+    scale_y_continuous(
+      labels = scales::comma,
+      limits = c(0, max(wk83_pred$upr, wk83_data$return, na.rm = TRUE)),
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    labs(
+      x = "CPUE (Somass-origin Chinook)",
+      y = "Somass Chinook return"
+    )
+)
+
+
+# Save the plot with predictions
+ggsave(
+  plot = wk83_plot,
+  filename = here(curr_year, "R-PLOT_wk83_cpue_model_prediction.png"),
+  height = 4,
+  width = 8,
+  units = "in"
+)
+
+
 
 
