@@ -22,7 +22,7 @@ curr_year <- 2025
 
 # Somass terminal adult return data
 bs_cn <- read_xlsx(
-  here("01-data_CN_return_predictors_2025.xlsx"),
+  here("01-data_CN_return_predictors_2025_NEW.xlsx"),
   sheet = "CN_return_predictors"
 ) |> 
   select(year, matches("(?i)Somass_term_"))
@@ -30,7 +30,7 @@ bs_cn <- read_xlsx(
 
 # CPUEs from creel data
 cpue <- read_excel(
-  here("01-data_CN_return_predictors.xlsx"), 
+  here("01-data_CN_return_predictors_2025_NEW.xlsx"), 
   sheet = "CREEL Interview Summary"
 ) |>   
   clean_names() |> 
