@@ -286,16 +286,12 @@ wk83_data <- cpue |>
   # the particular stat areas might not be the best to use. 
   #na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
 
-# Plot the relationship (should be R^2 of ~0.)
+# Plot the relationship (should be R^2 of ~0.31)
 wk83_data |>  
   ggplot(aes(x = ttl_cpue, y = return)) +
   geom_point() +
   geom_smooth(method = "lm") +
- # geom_text(hjust = 0.1, vjust = 0.1, label = year)  
   stat_poly_eq() +
-  #geom_text(hjust = 0.1, vjust = 0.1) + 
-  #scale_y_continuous(trans = "log") +
-  #scale_x_continuous(trans = "log")
   geom_label_repel(aes(label = year),
                    box.padding   = 0.35, 
                    point.padding = 0.5,
@@ -310,7 +306,6 @@ wk83_mod <- lm(return ~ ttl_cpue, data = wk83_data)
 #Beginning of code to evaluated model efficacy. 
 pred_df <- predict(wk83_mod, interval = "prediction") |>
   as.data.frame() 
-  #mutate(across(everything(), exp))  # back-transform from log
 
 wk83_df <- cbind(wk83_data, pred_df)
 
@@ -340,17 +335,10 @@ ggplot(pred_df, aes(x = factor(year))) +
 
 # Model predictions
 wk83_pred <- data.frame(
-  ttl_cpue = seq(
-    min(wk83_data$ttl_cpue, na.rm = TRUE), 
-    max(wk83_data$ttl_cpue, na.rm = TRUE), 
-    length.out = 100
-  )
-) |> 
-  bind_rows(
     wk83_data |> 
       #filter(year == curr_year) |> 
       select(year, ttl_cpue)
-  ) %>%
+ %>%
   cbind(
     .,
     predict(wk83_mod, ., interval = "pred", level = 0.75)
@@ -371,11 +359,15 @@ wk83_pred <- data.frame(
       data = wk83_data,
       aes(y = return)
     ) +
+    geom_text(aes(label = year),
+                     vjust = -1,
+                      color = "black") +
     geom_pointrange(
       data = filter(wk83_pred, year == curr_year),
       aes(ymin = lwr, ymax = upr),
       colour = "red"
     ) +
+
     annotate(
       "text",
       label = paste(
@@ -394,8 +386,10 @@ wk83_pred <- data.frame(
       limits = c(0, max(wk83_pred$upr, wk83_data$return, na.rm = TRUE)),
       expand = expansion(mult = c(0, 0.05))
     ) +
+    ggtitle(paste(cpue_type, " of stat week ", stat_week, 
+                  "sub area ", stat_area[1])) +
     labs(
-      x = "CPUE (Somass-origin Chinook)",
+      x = "CPUE",
       y = "Somass Chinook return"
     )
 )
