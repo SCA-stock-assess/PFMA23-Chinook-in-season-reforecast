@@ -246,6 +246,12 @@ ggsave(
 # Exploratory analysis (q.v. here("plots")) tells us the best model for 
 # Week 83 is the rch loglog from subareas 23J, 23C, and 23E
 unique(cpue$statsub)
+# R^2 of individual areas:
+# A:0.31, B:0.04, C:0.79 negatively correlated not many values
+# D:0.07, E:0.50 (not many years)
+# F: no data points
+# J: 0.07, K:0.01, M:<0.01, 
+# Q-T: 0.50 but most folks catch Lingcod in area Q.
 #c("23C", "23J", "23E"), # R^2 = 0.55
 #c("23C", "23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.51
 #c("23C", "23E", "23F", "23J", "23K", "23Q+123T"), #R^2 = 0.53
@@ -254,7 +260,9 @@ unique(cpue$statsub)
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K"), #R^2 = 0.333 
 #c("23C", "23D", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
-stat_area =  c("23A") ##c("23D","23E", "23F", "23M", "23J", "23K", "23Q+123T")
+#c("23D","23E", "23F", "23M", "23J", "23K", "23Q+123T") #R^2 = 0.34
+#c("23A", "23D", "23J", "23K",) #R^2 = 0.12
+stat_area =  c("23A")
 stat_week = c("83")
 cpue_type = c("ttl_cpue")
 # unique(cpue$period)
