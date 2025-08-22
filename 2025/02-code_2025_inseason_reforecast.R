@@ -112,7 +112,8 @@ wk83_data <- cpue |>
   filter(rch_cpue > 0)# |> # took out 0 values of CPUE. This inflates the R^2. 
   # In general if all subareas had 0 CPUE then it is either an anomoly, or
   # the particular stat areas might not be the best to use. 
-  #na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
+  #na.omit() #Take out most recent year so that we can cbind wk83_data to pred_df
+  #to calculate model efficiency (MAPE) don't do this line if running model for prediction
 
 # Plot the relationship (should be R^2 of ~0.74)
 wk83_data |>  
@@ -134,7 +135,8 @@ wk83_data |>
 # Fit the model
 wk83_mod <- lm(log(return) ~ log(rch_cpue+1e-4), data = wk83_data)
 
-#Beginning of code to evaluated model efficacy. 
+#Beginning of code to evaluated model efficacy. No need to run if doing 
+  #in season prediction. Use if doing model evaluation. 
 pred_df <- predict(wk83_mod, interval = "prediction") |>
   as.data.frame() |>
   mutate(across(everything(), exp))  # back-transform from log
@@ -271,10 +273,10 @@ wk83_data <- cpue |>
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
   )|> 
-  filter(ttl_cpue > 0.05) |> # took out values of CPUE close to 0. This inflates the R^2. 
+  filter(ttl_cpue > 0.05) # |> # took out values of CPUE close to 0. This inflates the R^2. 
   # In general if all subareas had 0 CPUE then it is either an anomoly, or
   # the particular stat areas might not be the best to use. 
-  na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
+  #na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
 
 # Plot the relationship (should be R^2 of ~0.)
 wk83_data |>  
@@ -295,7 +297,7 @@ wk83_data |>
   theme_classic()
 
 # Fit the model
-wk83_mod <- lm(return ~ rch_cpue, data = wk83_data)
+wk83_mod <- lm(return ~ ttl_cpue, data = wk83_data)
 
 #Beginning of code to evaluated model efficacy. 
 pred_df <- predict(wk83_mod, interval = "prediction") |>
@@ -330,28 +332,27 @@ ggplot(pred_df, aes(x = factor(year))) +
 
 # Model predictions
 wk83_pred <- data.frame(
-  rch_cpue = seq(
-    min(wk83_data$rch_cpue, na.rm = TRUE), 
-    max(wk83_data$rch_cpue, na.rm = TRUE), 
+  ttl_cpue = seq(
+    min(wk83_data$ttl_cpue, na.rm = TRUE), 
+    max(wk83_data$ttl_cpue, na.rm = TRUE), 
     length.out = 100
   )
 ) |> 
   bind_rows(
     wk83_data |> 
       #filter(year == curr_year) |> 
-      select(year, rch_cpue)
+      select(year, ttl_cpue)
   ) %>%
   cbind(
     .,
     predict(wk83_mod, ., interval = "pred", level = 0.75)
-  ) |> 
-  mutate(across(fit:upr, exp))
+  ) 
 
 
 # Plot predictions
 (wk83_plot <- wk83_pred |> 
     filter(is.na(year)) |> 
-    ggplot(aes(x = rch_cpue, y = fit)) +
+    ggplot(aes(x = ttl_cpue, y = fit)) +
     geom_ribbon(
       aes(ymin = lwr, ymax = upr),
       fill = "blue",
@@ -374,7 +375,7 @@ wk83_pred <- data.frame(
         round(summary(wk83_mod)$adj.r.squared, 2)
       ),
       parse = TRUE,
-      x = min(wk83_pred$rch_cpue),
+      x = min(wk83_pred$ttl_cpue),
       y = max(wk83_pred$upr),
       hjust = 0,
       vjust = 1,
