@@ -252,11 +252,13 @@ unique(cpue$statsub)
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K"), #R^2 = 0.333 
 #c("23C", "23D", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
-stat_area = c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T", "123R")
+stat_area = c("23A")
+stat_week = c("83")
+# unique(cpue$period)
 # Subset to data for wk83 relationship
 wk83_data <- cpue |> 
   filter(
-    period == "cum83",
+    period == stat_week, #
     statsub %in% stat_area,
     !if_any(c(cn_all_k, boat_trips), is.na)
   ) |> 
@@ -268,14 +270,14 @@ wk83_data <- cpue |>
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
   )|> 
-  filter(rch_cpue > 0.05) |> # took out values of CPUE close to 0. This inflates the R^2. 
+  filter(ttl_cpue > 0.05) |> # took out values of CPUE close to 0. This inflates the R^2. 
   # In general if all subareas had 0 CPUE then it is either an anomoly, or
   # the particular stat areas might not be the best to use. 
   na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
 
 # Plot the relationship (should be R^2 of ~0.22)
 wk83_data |>  
-  ggplot(aes(x = rch_cpue, y = return)) +
+  ggplot(aes(x = ttl_cpue, y = return)) +
   geom_point() +
   geom_smooth(method = "lm") +
  # geom_text(hjust = 0.1, vjust = 0.1, label = year)  
@@ -287,7 +289,8 @@ wk83_data |>
                    box.padding   = 0.35, 
                    point.padding = 0.5,
                    segment.color = 'grey50') +
-  ggtitle(paste("CPUE of sub areas ", stat_area[1], stat_area[2])) +
+  ggtitle(paste("CPUE of stat week ", stat_week, 
+                "sub areas ", stat_area[1], stat_area[2])) +
   theme_classic()
 
 # Fit the model
