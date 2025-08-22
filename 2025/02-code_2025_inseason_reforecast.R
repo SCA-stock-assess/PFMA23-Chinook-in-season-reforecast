@@ -10,6 +10,7 @@ library(here)
 library(readxl)
 library(janitor)
 library(ggpmisc)
+library(ggrepel)
 library(MLmetrics)
 
 
@@ -51,7 +52,7 @@ cpue <- read_excel(
   ) |>  
   summarise(
     .by = c(year, statsub, sw),
-    across(c(cn_all_k, rch_cn_k), sum),
+    across(c(cn_all_k, rch_cn_k), sum, na.rm = TRUE),
     boat_trips = n()
   ) |> 
   # Add column with adult return data
@@ -242,13 +243,21 @@ ggsave(
 
 # Exploratory analysis (q.v. here("plots")) tells us the best model for 
 # Week 83 is the rch loglog from subareas 23J, 23C, and 23E
-
-
+unique(cpue$statsub)
+#c("23C", "23J", "23E"), # R^2 = 0.55
+#c("23C", "23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.51
+#c("23C", "23E", "23F", "23J", "23K", "23Q+123T"), #R^2 = 0.53
+#c("23C", "23E", "23J", "23K", "23Q+123T"), #R^2 = 0.49
+#c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T", "123R"), #R^2 = 0.58
+#c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
+#c("23C", "23D","23E", "23F", "23M", "23J", "23K"), #R^2 = 0.333 
+#c("23C", "23D", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
+stat_area = c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T", "123R")
 # Subset to data for wk83 relationship
 wk83_data <- cpue |> 
   filter(
-    period == "83",
-    statsub %in% c("23D", "23J", "23K"),#"23D", "23J", "23K", "23M"),
+    period == "cum83",
+    statsub %in% stat_area,
     !if_any(c(cn_all_k, boat_trips), is.na)
   ) |> 
   summarize(
@@ -269,17 +278,17 @@ wk83_data |>
   ggplot(aes(x = rch_cpue, y = return)) +
   geom_point() +
   geom_smooth(method = "lm") +
-  stat_poly_eq() #+
+ # geom_text(hjust = 0.1, vjust = 0.1, label = year)  
+  stat_poly_eq() +
+  #geom_text(hjust = 0.1, vjust = 0.1) + 
   #scale_y_continuous(trans = "log") +
   #scale_x_continuous(trans = "log")
-
-
-# Percent rank score for current year value
-wk83_data |> 
-  mutate(rank = percent_rank(rch_cpue)) |> 
-  filter(year == curr_year) |> 
-  pull(rank)
-
+  geom_label_repel(aes(label = year),
+                   box.padding   = 0.35, 
+                   point.padding = 0.5,
+                   segment.color = 'grey50') +
+  ggtitle(paste("CPUE of sub areas ", stat_area[1], stat_area[2])) +
+  theme_classic()
 
 # Fit the model
 wk83_mod <- lm(return ~ rch_cpue, data = wk83_data)
