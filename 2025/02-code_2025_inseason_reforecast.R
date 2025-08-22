@@ -14,7 +14,7 @@ library(ggrepel)
 library(MLmetrics)
 
 
-curr_year <- 2024
+curr_year <- 2025
 
 
 # Load data ---------------------------------------------------------------
@@ -22,7 +22,7 @@ curr_year <- 2024
 
 # Somass terminal adult return data
 bs_cn <- read_xlsx(
-  here("01-data_CN_return_predictors.xlsx"),
+  here("01-data_CN_return_predictors_2025.xlsx"),
   sheet = "CN_return_predictors"
 ) |> 
   select(year, matches("(?i)Somass_term_"))
@@ -252,8 +252,9 @@ unique(cpue$statsub)
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K"), #R^2 = 0.333 
 #c("23C", "23D", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
-stat_area = c("23A")
+stat_area = c("23D","23E", "23F", "23M", "23J", "23K", "23Q+123T")
 stat_week = c("83")
+cpue_type = c("ttl_cpue")
 # unique(cpue$period)
 # Subset to data for wk83 relationship
 wk83_data <- cpue |> 
@@ -289,7 +290,7 @@ wk83_data |>
                    box.padding   = 0.35, 
                    point.padding = 0.5,
                    segment.color = 'grey50') +
-  ggtitle(paste("CPUE of stat week ", stat_week, 
+  ggtitle(paste(cpue_type, " of stat week ", stat_week, 
                 "sub areas ", stat_area[1], stat_area[2])) +
   theme_classic()
 
