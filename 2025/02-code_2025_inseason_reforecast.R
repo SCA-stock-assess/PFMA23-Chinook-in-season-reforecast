@@ -109,10 +109,10 @@ wk83_data <- cpue |>
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
   )|> 
-  filter(rch_cpue > 0) |> # took out 0 values of CPUE. This inflates the R^2. 
+  filter(rch_cpue > 0)# |> # took out 0 values of CPUE. This inflates the R^2. 
   # In general if all subareas had 0 CPUE then it is either an anomoly, or
   # the particular stat areas might not be the best to use. 
-  na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
+  #na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
 
 # Plot the relationship (should be R^2 of ~0.74)
 wk83_data |>  
@@ -134,7 +134,7 @@ wk83_data |>
 # Fit the model
 wk83_mod <- lm(log(return) ~ log(rch_cpue+1e-4), data = wk83_data)
 
-#Begining of code to evaluated model efficacy. 
+#Beginning of code to evaluated model efficacy. 
 pred_df <- predict(wk83_mod, interval = "prediction") |>
   as.data.frame() |>
   mutate(across(everything(), exp))  # back-transform from log
@@ -147,8 +147,8 @@ MAPE(wk83_df$fit, wk83_df$return)
 #Try to find a better inseason forecast OR use the preseason forecast. 
 
 # 
-pred_df <- pred_df |>
-  mutate(actual = model_data$return)
+#pred_df <- pred_df |>
+#  mutate(actual = model_data$return)
 
 #Note this figure doesn't work
 ggplot(pred_df, aes(x = factor(year))) +
@@ -252,7 +252,7 @@ unique(cpue$statsub)
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
 #c("23C", "23D","23E", "23F", "23M", "23J", "23K"), #R^2 = 0.333 
 #c("23C", "23D", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
-stat_area = c("23D","23E", "23F", "23M", "23J", "23K", "23Q+123T")
+stat_area =  c("23A") ##c("23D","23E", "23F", "23M", "23J", "23K", "23Q+123T")
 stat_week = c("83")
 cpue_type = c("ttl_cpue")
 # unique(cpue$period)
@@ -276,7 +276,7 @@ wk83_data <- cpue |>
   # the particular stat areas might not be the best to use. 
   na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
 
-# Plot the relationship (should be R^2 of ~0.22)
+# Plot the relationship (should be R^2 of ~0.)
 wk83_data |>  
   ggplot(aes(x = ttl_cpue, y = return)) +
   geom_point() +
