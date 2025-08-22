@@ -113,7 +113,7 @@ minimal_data |>
 # the darkness of the blue == 0 is more opaque.
 
 #look at last 3 years
-minimal_data |>
+#minimal_data |>
   
 
 # so remove data from september (91, 92 cum91, cum 92)
@@ -124,7 +124,7 @@ minimal_data <- minimal_data|>
 
 
 # Make a list of subarea combinations to group by
-combo_n <- seq.int(3,8) # set #s of subarea combos to try 
+combo_n <- seq.int(3,5) # set #s of subarea combos to try 
 # Start small (e.g. 3-4) to get script working smoothly
 # Will take a long time (45+min) to run for larger groups
 
@@ -191,7 +191,8 @@ nested_data <- subarea_combos |>
   ) |> 
   filter(cpue > 0)|>
   ungroup() |> 
-  filter(n_obs > 9)
+  filter(n_obs > 9)|>
+  filter(period == "83")
 
 
 # Fit models to the data with various transformations
@@ -311,6 +312,7 @@ bs_land <- st_crop(coastline, bbox)
 
 
 # Save data to plot r2 values as fill under creel subarea
+
 top_models <- nested_models |> 
   filter(
     n_obs > 12, # A couple of models based on less data had strong relationships
