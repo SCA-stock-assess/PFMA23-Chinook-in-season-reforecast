@@ -349,7 +349,10 @@ ggsave(filename = here(paste0(curr_year, "/wk", stat_week, "_", stat_area, "_", 
 #Use  unique(cpue$statsub) to identify which ones are available to use.
 #Note some stat_weeks have no data
 
-cpue_type = c("ttl_cpue") #Note currently have to edit cpue type in code below.
+#cpue_type = #Note currently this is only used to name the plot when saving.
+# Use inseason_ttl_cpue() if you want to use ttl_cpue.
+# Use inseason_rch_cpue() if you want to use rch_cpue.
+
 #Can either use "total" cpue which is the raw cpue or Robertson Creek Hatchery cpue
 #Which uses the percent of rch estimated caught in that stat area(s) in previous years
 
@@ -449,7 +452,7 @@ inseason_ttl_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23D"), this_
 
 #Function for rch_cpue
 #
-#
+#Arguments are much like for inseason_ttl_cpue() defined above with more information
 #
 #
 
