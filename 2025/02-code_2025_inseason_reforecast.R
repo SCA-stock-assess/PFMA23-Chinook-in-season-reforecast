@@ -406,7 +406,7 @@ cat(this_year, " Forecast:", round(latest$fit, -3), "\n",
 #pull out r.squared for figure
 (r2 <- summary(wk83_mod)$r.squared)
 
-(my_plot <- ggplot(pred_df, aes(x = ttl_cpue, y = actual)) +
+my_plot <- ggplot(pred_df, aes(x = ttl_cpue, y = actual)) +
   geom_point(color = "steelblue", size = 3) + # actual values
   geom_smooth(method = "lm", color = "steelblue", se = FALSE) +  # regression line
   geom_ribbon(
@@ -433,7 +433,9 @@ cat(this_year, " Forecast:", round(latest$fit, -3), "\n",
                       " | Forecast = ", round(latest$fit, -3) , 
                       ", 75% Predictive Interval:(", round(latest$lwr, -3), ", ", round(latest$upr, -3),")")
   ) +
-  theme_minimal())
+  theme_minimal()
+
+print(my_plot)
 
 ## Save the plot with predictions
 ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", stat_area, "_", cpue_type, ".png")),
@@ -504,7 +506,7 @@ inseason_rch_cpue <- function(data = cpue,
   #pull out r.squared for figure
   (r2 <- summary(wk83_mod)$r.squared)
   
-  (my_plot <- ggplot(pred_df, aes(x = rch_cpue, y = actual)) +
+  my_plot <- ggplot(pred_df, aes(x = rch_cpue, y = actual)) +
       geom_point(color = "steelblue", size = 3) + # actual values
       geom_smooth(method = "lm", color = "steelblue", se = FALSE) +  # regression line
       geom_ribbon(
@@ -531,7 +533,8 @@ inseason_rch_cpue <- function(data = cpue,
                           " | Forecast = ", round(latest$fit, -3) , 
                           ", 75% Predictive Interval:(", round(latest$lwr, -3), ", ", round(latest$upr, -3),")")
       ) +
-      theme_minimal())
+      theme_minimal()
+  print(my_plot)
   
   ## Save the plot with predictions
   ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", stat_area, "_", cpue_type, ".png")),
@@ -541,4 +544,18 @@ inseason_rch_cpue <- function(data = cpue,
          units = "in")
 }
 
-inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23D"), this_year = 2025)
+unique(cpue$statsub)
+inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23E"), this_year = 2025)
+
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23A"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23B"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23C"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23D"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23E"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23F"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23J"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23K"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23M"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23R"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23Q+123T"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
