@@ -148,23 +148,6 @@ MAPE(wk83_df$fit, wk83_df$return)
 #data up to 2023 gives a MAPE of 0.2808277 This is worse than the preseason forecast.
 #Try to find a better inseason forecast OR use the preseason forecast. 
 
-# 
-#pred_df <- pred_df |>
-#  mutate(actual = model_data$return)
-
-#Note this figure doesn't work
-ggplot(pred_df, aes(x = factor(year))) +
-  geom_col(aes(y = return), fill = "steelblue", alpha = 0.6) +
-  geom_point(aes(y = fit), color = "darkred", size = 3) +
-  geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2, color = "darkred") +
-  labs(
-    x = "Year",
-    y = "Return",
-    title = "Actual vs Forecasted Returns",
-    subtitle = "Bars = Actual | Points & Lines = Forecast with Prediction Interval"
-  ) +
-  theme_minimal()
-
 # End of code to determine model efficacy. 
 
 # Model predictions
@@ -234,7 +217,7 @@ wk83_pred <- data.frame(
 # Save the plot with predictions
 ggsave(
   plot = wk83_plot,
-  filename = here(curr_year, "R-PLOT_wk83_cpue_model_prediction.png"),
+  filename = here(curr_year, "R-PLOT_wk83_cpue_model_prediction_2024model.png"),
   height = 4,
   width = 8,
   units = "in"
@@ -243,14 +226,17 @@ ggsave(
 # New (2025)Week 83 model -----------------------------------------------------------
 
 
-# Exploratory analysis (q.v. here("plots")) tells us the best model for 
-# Week 83 is the rch loglog from subareas 23J, 23C, and 23E
-unique(cpue$statsub)
+# Many options were explored. Settled on area 23A since it has a higher R^2 from other areas
+# No transformations, since errors appear iid (identically and independantly distributed
+# Other high R^2 values with combinations of areas seem spurious
+# 
 # R^2 of individual areas:
 # A:0.31, B:0.04, C:0.79 negatively correlated not many values
 # D:0.07, E:0.50 (not many years)
 # F: no data points
 # J: 0.07, K:0.01, M:<0.01, 
+#
+# R^2 of combinations of some areas
 # Q-T: 0.50 but most folks catch Lingcod in area Q.
 #c("23C", "23J", "23E"), # R^2 = 0.55
 #c("23C", "23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.51
@@ -264,8 +250,10 @@ unique(cpue$statsub)
 #c("23A", "23D", "23J", "23K",) #R^2 = 0.12
 stat_area =  c("23A")
 stat_week = c("83")
-cpue_type = c("ttl_cpue")
-# unique(cpue$period)
+cpue_type = c("ttl_cpue") #Note currently have to edit cpue type in code below.
+#Can either use "total" cpue which is the raw cpue or Robertson Creek Hatchery cpue
+#Which uses the percent of rch estimated caught in that stat area(s) in previous years
+
 # Subset to data for wk83 relationship
 wk83_data <- cpue |> 
   filter(
@@ -284,126 +272,167 @@ wk83_data <- cpue |>
   filter(ttl_cpue > 0.05) # |> # took out values of CPUE close to 0. This inflates the R^2. 
   # In general if all subareas had 0 CPUE then it is either an anomoly, or
   # the particular stat areas might not be the best to use. 
-  #na.omit() #took out most recent year so that I can cbind wk83_data to pred_df
-
-# Plot the relationship (should be R^2 of ~0.31)
-wk83_data |>  
-  ggplot(aes(x = ttl_cpue, y = return)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  stat_poly_eq() +
-  geom_label_repel(aes(label = year),
-                   box.padding   = 0.35, 
-                   point.padding = 0.5,
-                   segment.color = 'grey50') +
-  ggtitle(paste(cpue_type, " of stat week ", stat_week, 
-                "sub areas ", stat_area[1], stat_area[2])) +
-  theme_classic()
 
 # Fit the model
 wk83_mod <- lm(return ~ ttl_cpue, data = wk83_data)
 
-#Beginning of code to evaluated model efficacy. 
-pred_df <- predict(wk83_mod, interval = "prediction") |>
-  as.data.frame() 
+pred_df <- predict(
+  wk83_mod,
+  newdata = wk83_data,
+  interval = "prediction",
+  level = 0.75 #Calculates a 75% prediction interval
+) |>
+  as.data.frame() |>
+  mutate(year =     wk83_data$year,
+         actual =   wk83_data$return,
+         ttl_cpue = wk83_data$ttl_cpue,
+         rch_cpue = wk83_data$rch_cpue)
 
-wk83_df <- cbind(wk83_data, pred_df)
+#Here is the forecast, to adjust prediction interval change the level above. 
+latest <- pred_df |> filter(year == curr_year)
+cat("2025 Forecast:", round(latest$fit, -3), "\n",
+    "Lower 75% PI:",  round(latest$lwr, -3), "\n",
+    "Upper 75% PI:",  round(latest$upr, -3), "\n")
 
-# Calculate MAPE
-MAPE(wk83_df$fit, wk83_df$return) 
-#data up to 2023 gives a MAPE of 0.4222564 This is worse than the preseason forecast.
-#Try to find a better inseason forecast OR use the preseason forecast. 
+#Calculate mean absolute percentage of error
+(mape <- MAPE(y_pred = pred_df$fit[!is.na(pred_df$actual)],
+             y_true = pred_df$actual[!is.na(pred_df$actual)]))
 
-# 
-pred_df <- pred_df |>
-  mutate(actual = model_data$return)
+#pull out r.squared for figure
+(r2 <- summary(wk83_mod)$r.squared)
 
-#Note this figure doesn't work
-ggplot(pred_df, aes(x = factor(year))) +
-  geom_col(aes(y = return), fill = "steelblue", alpha = 0.6) +
-  geom_point(aes(y = fit), color = "darkred", size = 3) +
-  geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2, color = "darkred") +
+my_plot <- ggplot(pred_df, aes(x = ttl_cpue, y = actual)) +
+  geom_point(color = "steelblue", size = 3) + # actual values
+  geom_smooth(method = "lm", color = "steelblue", se = FALSE) +  # regression line
+  geom_ribbon(
+    aes(ymin = lwr, ymax = upr),
+    fill = "steelblue",
+    alpha = 0.3
+  ) +
+  geom_label_repel(aes(label = year),
+                   segment.color = 'grey50') +
+  geom_point(data = latest, aes(x = ttl_cpue[year == curr_year],y = fit),
+             color = "darkgreen", size = 4) +                              # 2025 forecast
+  geom_errorbar(data = latest, aes(x = ttl_cpue[year == curr_year], 
+                                   ymin = lwr, ymax = upr),
+                color = "darkgreen", width = 0.1) +
+  geom_label_repel(data = latest, aes(x = ttl_cpue, y = fit, label = year), 
+            color = "darkgreen") +
   labs(
-    x = "Year",
+    x = "Total CPUE",
     y = "Return",
-    title = "Actual vs Forecasted Returns",
-    subtitle = "Bars = Actual | Points & Lines = Forecast with Prediction Interval"
+    title = paste("Return vs ", cpue_type, " of stat week ", stat_week, 
+                  "sub area ", stat_area[1]),
+    subtitle = paste0("R² = ", round(r2, 3), 
+                      " | MAPE = ", round(mape, 3),
+                      " | Forecast = ", round(latest$fit, -3) , 
+                      ", 75% Predictive Interval:(", round(latest$lwr, -3), ", ", round(latest$upr, -3),")")
   ) +
   theme_minimal()
 
-# End of code to determine model efficacy. 
-
-# Model predictions
-wk83_pred <- data.frame(
-    wk83_data |> 
-      #filter(year == curr_year) |> 
-      select(year, ttl_cpue)
- %>%
-  cbind(
-    .,
-    predict(wk83_mod, ., interval = "pred", level = 0.75)
-  ) 
-
-
-# Plot predictions
-(wk83_plot <- wk83_pred |> 
-    filter(is.na(year)) |> 
-    ggplot(aes(x = ttl_cpue, y = fit)) +
-    geom_ribbon(
-      aes(ymin = lwr, ymax = upr),
-      fill = "blue",
-      alpha = 0.3
-    ) +
-    geom_line(colour = "blue") +
-    geom_point(
-      data = wk83_data,
-      aes(y = return)
-    ) +
-    geom_text(aes(label = year),
-                     vjust = -1,
-                      color = "black") +
-    geom_pointrange(
-      data = filter(wk83_pred, year == curr_year),
-      aes(ymin = lwr, ymax = upr),
-      colour = "red"
-    ) +
-
-    annotate(
-      "text",
-      label = paste(
-        "~italic(R)^2==",
-        round(summary(wk83_mod)$adj.r.squared, 2)
-      ),
-      parse = TRUE,
-      x = min(wk83_pred$ttl_cpue),
-      y = max(wk83_pred$upr),
-      hjust = 0,
-      vjust = 1,
-      size = 6
-    ) +
-    scale_y_continuous(
-      labels = scales::comma,
-      limits = c(0, max(wk83_pred$upr, wk83_data$return, na.rm = TRUE)),
-      expand = expansion(mult = c(0, 0.05))
-    ) +
-    ggtitle(paste(cpue_type, " of stat week ", stat_week, 
-                  "sub area ", stat_area[1])) +
-    labs(
-      x = "CPUE",
-      y = "Somass Chinook return"
-    )
-)
-
-
-# Save the plot with predictions
-ggsave(
-  plot = wk83_plot,
-  filename = here(curr_year, "R-PLOT_wk83_cpue_model_prediction.png"),
+## Save the plot with predictions
+ggsave(filename = here(paste0(curr_year, "/wk", stat_week, "_", stat_area, "_", cpue_type, ".png")),
+  plot = my_plot, 
   height = 4,
   width = 8,
-  units = "in"
-)
+  units = "in")
 
 
+#########
+# create local function
 
+stat_area =  c("23A")
+stat_week = c("83")
+cpue_type = c("ttl_cpue") #Note currently have to edit cpue type in code below.
+#Can either use "total" cpue which is the raw cpue or Robertson Creek Hatchery cpue
+#Which uses the percent of rch estimated caught in that stat area(s) in previous years
 
+inseason <- function(data = cpue, 
+                     stat_week = c("83"),
+                     stat_area =  c("23A"),
+                     cpue_type = c("ttl_cpue")){
+  
+  
+# Subset to data for wk83 relationship
+statwk_data <- cpue |> 
+  filter(
+    period == stat_week, #
+    statsub %in% stat_area,
+    !if_any(c(cn_all_k, boat_trips), is.na)
+  ) |> 
+  summarize(
+    .by = c(year, return),
+    across(cn_all_k:boat_trips, sum)
+  ) |> 
+  mutate(
+    ttl_cpue = cn_all_k/boat_trips,
+    rch_cpue = rch_cn_k/boat_trips
+  )|> 
+  filter(ttl_cpue > 0.05) # |> # took out values of CPUE close to 0. This inflates the R^2. 
+# In general if all subareas had 0 CPUE then it is either an anomoly, or
+# the particular stat areas might not be the best to use. 
+
+# Fit the model
+wk83_mod <- lm(return ~ ttl_cpue, data = statwk_data)
+
+pred_df <- predict(
+  wk83_mod,
+  newdata = statwk_data,
+  interval = "prediction",
+  level = 0.75 #Calculates a 75% prediction interval
+) |>
+  as.data.frame() |>
+  mutate(year =     statwk_data$year,
+         actual =   statwk_data$return,
+         ttl_cpue = statwk_data$ttl_cpue,
+         rch_cpue = statwk_data$rch_cpue)
+
+#Here is the forecast, to adjust prediction interval change the level above. 
+latest <- pred_df |> filter(year == curr_year)
+cat("2025 Forecast:", round(latest$fit, -3), "\n",
+    "Lower 75% PI:",  round(latest$lwr, -3), "\n",
+    "Upper 75% PI:",  round(latest$upr, -3), "\n")
+
+#Calculate mean absolute percentage of error
+(mape <- MAPE(y_pred = pred_df$fit[!is.na(pred_df$actual)],
+              y_true = pred_df$actual[!is.na(pred_df$actual)]))
+
+#pull out r.squared for figure
+(r2 <- summary(wk83_mod)$r.squared)
+
+(my_plot <- ggplot(pred_df, aes(x = ttl_cpue, y = actual)) +
+  geom_point(color = "steelblue", size = 3) + # actual values
+  geom_smooth(method = "lm", color = "steelblue", se = FALSE) +  # regression line
+  geom_ribbon(
+    aes(ymin = lwr, ymax = upr),
+    fill = "steelblue",
+    alpha = 0.3
+  ) +
+  geom_label_repel(aes(label = year),
+                   segment.color = 'grey50') +
+  geom_point(data = latest, aes(x = ttl_cpue[year == curr_year],y = fit),
+             color = "darkgreen", size = 4) +                              # 2025 forecast
+  geom_errorbar(data = latest, aes(x = ttl_cpue[year == curr_year], 
+                                   ymin = lwr, ymax = upr),
+                color = "darkgreen", width = 0.1) +
+  geom_label_repel(data = latest, aes(x = ttl_cpue, y = fit, label = year), 
+                   color = "darkgreen") +
+  labs(
+    x = "Total CPUE",
+    y = "Return",
+    title = paste("Return vs ", cpue_type, " of stat week ", stat_week, 
+                  "sub area ", stat_area[1]),
+    subtitle = paste0("R² = ", round(r2, 3), 
+                      " | MAPE = ", round(mape, 3),
+                      " | Forecast = ", round(latest$fit, -3) , 
+                      ", 75% Predictive Interval:(", round(latest$lwr, -3), ", ", round(latest$upr, -3),")")
+  ) +
+  theme_minimal())
+
+## Save the plot with predictions
+ggsave(filename = here(paste0(curr_year, "/wk", stat_week, "_", stat_area, "_", cpue_type, ".png")),
+       plot = my_plot, 
+       height = 4,
+       width = 8,
+       units = "in")
+}
