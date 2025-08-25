@@ -14,7 +14,7 @@ library(ggrepel)
 library(MLmetrics)
 
 
-curr_year <- 2025
+curr_year <- 2024
 
 
 # Load data ---------------------------------------------------------------
@@ -47,6 +47,7 @@ cpue <- read_excel(
       # in 2011, 23H was split into 23Q and 23N (now 123T)
       statsub %in% c("23H", "23Q", "23N", "123T") ~ "23Q+123T", 
       statsub == "23I" ~ "123R", # Changed in 2022
+     # statsub %in% unique(statsub) ~ "all",
       TRUE ~ statsub
     )
   ) |>  
@@ -59,7 +60,7 @@ cpue <- read_excel(
   left_join(select(.data = bs_cn, year, Somass_term_adult_return)) |> 
   rename("return" = "Somass_term_adult_return") |> 
   # Keep only the mid-Aug to mid-Sept stat weeks
-  filter(sw %in% c(82, 83, 84, 91, 92)) |> 
+  # filter(sw %in% c(82, 83, 84, 91, 92)) |> 
   pivot_longer(cols = cn_all_k:boat_trips) |> 
   pivot_wider(
     names_from = sw,
@@ -68,6 +69,8 @@ cpue <- read_excel(
   rowwise() |> 
   # Sum kept chinook and interviews across stat week periods
   mutate(
+    cum7183 = sum(c_across(`71`:`83`), na.rm = TRUE),
+    cum7184 = sum(c_across(`71`:`84`), na.rm = TRUE),
     cum83 = `82` + `83`,
     cum84 = sum(c_across(`82`:`84`), na.rm = TRUE),
     cum91 = sum(c_across(`83`:`91`), na.rm = TRUE),
@@ -75,6 +78,8 @@ cpue <- read_excel(
     `8384` = `83` + `84`,
     `8491` = `84` + `91`
   ) |> 
+  #dont keep all stat weeks
+  #filter(sw %!in% c(`71`:`81`)) |> 
   ungroup() |> 
   pivot_longer(
     cols = matches("[[:digit:]]{2,}"),
@@ -86,7 +91,8 @@ cpue <- read_excel(
     values_from = value
   )
 
-
+unique(cpue$period)
+unique(cpue$statsub)
 # Week 83 model -----------------------------------------------------------
 
 
@@ -248,8 +254,8 @@ ggsave(
 #c("23C", "23D", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.63
 #c("23D","23E", "23F", "23M", "23J", "23K", "23Q+123T") #R^2 = 0.34
 #c("23A", "23D", "23J", "23K",) #R^2 = 0.12
-stat_area =  c("23A")
-stat_week = c("83")
+stat_area =  all_area
+stat_week = c("cum7183")
 cpue_type = c("ttl_cpue") #Note currently have to edit cpue type in code below.
 #Can either use "total" cpue which is the raw cpue or Robertson Creek Hatchery cpue
 #Which uses the percent of rch estimated caught in that stat area(s) in previous years
@@ -430,7 +436,7 @@ my_plot <- ggplot(pred_df, aes(x = ttl_cpue, y = actual)) +
     x = "Total CPUE",
     y = "Return",
     title = paste("Return vs ", cpue_type, " of stat week ", stat_week, 
-                  "sub area ", stat_area[1]),
+                  "sub area ", paste(stat_area, collapse = ", ")),
     subtitle = paste0("R² = ", round(r2, 3), 
                       " | MAPE = ", round(mape, 3),
                       " | Forecast = ", round(latest$fit, -3) , 
@@ -448,7 +454,8 @@ ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", stat_area, "_", 
        units = "in")
 }
 
-inseason_ttl_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23D"), this_year = 2025)
+all_area <- unique(cpue$statsub)
+inseason_ttl_cpue(data = cpue, stat_week = c("cum7183"), stat_area =  all_area, this_year = 2025)
 
 #Function for rch_cpue
 #
@@ -530,7 +537,7 @@ inseason_rch_cpue <- function(data = cpue,
         x = "Total CPUE",
         y = "Return",
         title = paste("Return vs ", cpue_type, " of stat week ", stat_week, 
-                      "sub area ", stat_area[1]),
+                      "sub area ", paste(stat_area, collapse = ", ")),
         subtitle = paste0("R² = ", round(r2, 3), 
                           " | MAPE = ", round(mape, 3),
                           " | Forecast = ", round(latest$fit, -3) , 
@@ -547,7 +554,8 @@ inseason_rch_cpue <- function(data = cpue,
          units = "in")
 }
 
-unique(cpue$statsub)
+all_sub <- unique(cpue$statsub)
+unique(cpue$period)
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23E"), this_year = 2025)
 
 inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23A"), this_year = 2025)
@@ -562,3 +570,9 @@ inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23M"), this_
 inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23R"), this_year = 2025)
 inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23Q+123T"), this_year = 2025)
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
+inseason_ttl_cpue(data = cpue, stat_week = c("cum7183"), stat_area =  all_area, this_year = 2025)
+inseason_ttl_cpue(data = cpue, stat_week = c("cum7184"), stat_area =  all_area, this_year = 2025)
+
+inseason_rch_cpue(data = cpue, stat_week = c("cum7183"), stat_area =  all_area, this_year = 2025)
+inseason_rch_cpue(data = cpue, stat_week = c("cum7184"), stat_area =  all_area, this_year = 2025)
