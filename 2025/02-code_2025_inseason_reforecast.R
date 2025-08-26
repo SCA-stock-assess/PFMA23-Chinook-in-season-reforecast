@@ -14,7 +14,7 @@ library(ggrepel)
 library(MLmetrics)
 
 
-curr_year <- 2024
+curr_year <- 2025
 
 
 # Load data ---------------------------------------------------------------
@@ -69,8 +69,8 @@ cpue <- read_excel(
   rowwise() |> 
   # Sum kept chinook and interviews across stat week periods
   mutate(
-    cum7183 = sum(c_across(`71`:`83`), na.rm = TRUE),
-    cum7184 = sum(c_across(`71`:`84`), na.rm = TRUE),
+    #cum7183 = sum(c_across(`71`:`83`), na.rm = TRUE),
+    #cum7184 = sum(c_across(`71`:`84`), na.rm = TRUE),
     cum83 = `82` + `83`,
     cum84 = sum(c_across(`82`:`84`), na.rm = TRUE),
     cum91 = sum(c_across(`83`:`91`), na.rm = TRUE),
@@ -93,7 +93,7 @@ cpue <- read_excel(
 
 unique(cpue$period)
 unique(cpue$statsub)
-# Week 83 model -----------------------------------------------------------
+# Week 83 model for 2024 and/or earlier years-----------------------------------------------------------
 
 
 # Exploratory analysis (q.v. here("plots")) tells us the best model for 
@@ -571,6 +571,7 @@ inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23R"), this_
 inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23Q+123T"), this_year = 2025)
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
+
 inseason_ttl_cpue(data = cpue, stat_week = c("cum7183"), stat_area =  all_area, this_year = 2025)
 inseason_ttl_cpue(data = cpue, stat_week = c("cum7184"), stat_area =  all_area, this_year = 2025)
 
