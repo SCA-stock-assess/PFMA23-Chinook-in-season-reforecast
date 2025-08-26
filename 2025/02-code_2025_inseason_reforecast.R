@@ -47,7 +47,6 @@ cpue <- read_excel(
       # in 2011, 23H was split into 23Q and 23N (now 123T)
       statsub %in% c("23H", "23Q", "23N", "123T") ~ "23Q+123T", 
       statsub == "23I" ~ "123R", # Changed in 2022
-     # statsub %in% unique(statsub) ~ "all",
       TRUE ~ statsub
     )
   ) |>  
@@ -69,17 +68,17 @@ cpue <- read_excel(
   rowwise() |> 
   # Sum kept chinook and interviews across stat week periods
   mutate(
-    #cum7183 = sum(c_across(`71`:`83`), na.rm = TRUE),
-    #cum7184 = sum(c_across(`71`:`84`), na.rm = TRUE),
-    cum83 = `82` + `83`,
-    cum84 = sum(c_across(`82`:`84`), na.rm = TRUE),
+    cum7183 = sum(c_across(`71`:`83`), na.rm = TRUE),
+    cum7184 = sum(c_across(`71`:`84`), na.rm = TRUE),
+    `8183` = sum(c_across(`81`:`83`), na.rm = TRUE),
+    `8184` = sum(c_across(`81`:`84`), na.rm = TRUE),
+    `8283` = sum(c_across(`82`:`83`), na.rm = TRUE),
+    `8284` = sum(c_across(`82`:`84`), na.rm = TRUE),
     cum91 = sum(c_across(`83`:`91`), na.rm = TRUE),
     cum92 = sum(c_across(`83`:`92`), na.rm = TRUE),
-    `8384` = `83` + `84`,
-    `8491` = `84` + `91`
+    `8384` = sum(c_across(`83`:`84`), na.rm = TRUE),
+    `8491` = sum(c_across(`84`:`91`), na.rm = TRUE),
   ) |> 
-  #dont keep all stat weeks
-  #filter(sw %!in% c(`71`:`81`)) |> 
   ungroup() |> 
   pivot_longer(
     cols = matches("[[:digit:]]{2,}"),
@@ -91,9 +90,11 @@ cpue <- read_excel(
     values_from = value
   )
 
+#check that we have all the period and stat areas:
 unique(cpue$period)
 unique(cpue$statsub)
-# Week 83 model for 2024 and/or earlier years-----------------------------------------------------------
+
+# Week 83 model for 2024 and/or earlier-----------------------------------------------------------
 
 
 # Exploratory analysis (q.v. here("plots")) tells us the best model for 
@@ -232,8 +233,9 @@ ggsave(
 # New (2025)Week 83 model -----------------------------------------------------------
 
 
-# Many options were explored. Settled on area 23A since it has a higher R^2 from other areas
-# No transformations, since errors appear iid (identically and independantly distributed
+# Many options were explored. Settled on all areas since it has a higher R^2 from other areas
+# and is more consistent from week 83 to week 84. 
+# No transformations, since errors appear iid (identically and independently distributed)
 # Other high R^2 values with combinations of areas seem spurious
 # 
 # R^2 of individual areas:
@@ -447,7 +449,7 @@ my_plot <- ggplot(pred_df, aes(x = ttl_cpue, y = actual)) +
 print(my_plot)
 
 ## Save the plot with predictions
-ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", stat_area, "_", cpue_type, ".png")),
+ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", paste(stat_area, collapse = "_"), "_", cpue_type, ".png")),
        plot = my_plot, 
        height = 4,
        width = 8,
@@ -455,7 +457,7 @@ ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", stat_area, "_", 
 }
 
 all_area <- unique(cpue$statsub)
-inseason_ttl_cpue(data = cpue, stat_week = c("cum7183"), stat_area =  all_area, this_year = 2025)
+inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025)
 
 #Function for rch_cpue
 #
@@ -537,7 +539,7 @@ inseason_rch_cpue <- function(data = cpue,
         x = "Total CPUE",
         y = "Return",
         title = paste("Return vs ", cpue_type, " of stat week ", stat_week, 
-                      "sub area ", paste(stat_area, collapse = ", ")),
+                      "sub area ", paste(stat_area, collapse = "_")),
         subtitle = paste0("R² = ", round(r2, 3), 
                           " | MAPE = ", round(mape, 3),
                           " | Forecast = ", round(latest$fit, -3) , 
@@ -547,7 +549,7 @@ inseason_rch_cpue <- function(data = cpue,
   print(my_plot)
   
   ## Save the plot with predictions
-  ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", stat_area, "_", cpue_type, ".png")),
+  ggsave(filename = here(paste0(this_year, "/wk", stat_week, "_", paste(stat_area, collapse = ", "), "_", cpue_type, ".png")),
          plot = my_plot, 
          height = 4,
          width = 8,
@@ -572,8 +574,26 @@ inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23Q+123T"), 
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
 
-inseason_ttl_cpue(data = cpue, stat_week = c("cum7183"), stat_area =  all_area, this_year = 2025)
-inseason_ttl_cpue(data = cpue, stat_week = c("cum7184"), stat_area =  all_area, this_year = 2025)
 
-inseason_rch_cpue(data = cpue, stat_week = c("cum7183"), stat_area =  all_area, this_year = 2025)
-inseason_rch_cpue(data = cpue, stat_week = c("cum7184"), stat_area =  all_area, this_year = 2025)
+#All areas
+inseason_ttl_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.55 f: 107
+inseason_ttl_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 f: 100
+inseason_rch_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.19
+inseason_rch_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.14
+
+inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.52 f: 116
+inseason_ttl_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.60 f: 126
+inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.17
+inseason_rch_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.13
+
+#Brads suggested areas
+inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23D", "23J", "23K"), this_year = 2025) # r2 = 0.07
+inseason_ttl_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23D", "23J", "23K"), this_year = 2025) # r2 = 0.26
+inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23D", "23J", "23K"), this_year = 2025) # r2 = 0.11
+inseason_rch_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23D", "23J", "23K"), this_year = 2025) # r2 = 0.30
+
+#area 23A
+inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.40
+inseason_ttl_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.21
+inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.40
+inseason_rch_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.20
