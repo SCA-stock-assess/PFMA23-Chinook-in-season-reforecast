@@ -238,13 +238,13 @@ ggsave(
 # No transformations, since errors appear iid (identically and independently distributed)
 # Other high R^2 values with combinations of areas seem spurious
 # 
-# R^2 of individual areas:
+# R^2 of individual areas for statweek 83:
 # A:0.31, B:0.04, C:0.79 negatively correlated not many values
 # D:0.07, E:0.50 (not many years)
 # F: no data points
 # J: 0.07, K:0.01, M:<0.01, 
 #
-# R^2 of combinations of some areas
+# R^2 of combinations of some areas for statweek 83
 # Q-T: 0.50 but most folks catch Lingcod in area Q.
 #c("23C", "23J", "23E"), # R^2 = 0.55
 #c("23C", "23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.51
@@ -299,7 +299,7 @@ statwk_data <- data |>
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
   )|> 
-  filter(ttl_cpue > 0.05) # |> # took out values of CPUE close to 0. This inflates the R^2. 
+#  filter(ttl_cpue > 0.05) # |> # took out values of CPUE close to 0. This inflates the R^2. 
 # In general if all subareas had 0 CPUE then it is either an anomoly, or
 # the particular stat areas might not be the best to use. 
 
@@ -485,16 +485,6 @@ inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23R"), this_
 inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23Q+123T"), this_year = 2025)
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
 
-#All areas
-inseason_ttl_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.55 f: 107
-inseason_ttl_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 f: 100
-inseason_rch_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.19
-inseason_rch_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.14
-
-inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.52 f: 116
-inseason_ttl_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.60 f: 126
-inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.17
-inseason_rch_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.13
 
 #Brads suggested areas
 inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23D", "23J", "23K"), this_year = 2025) # r2 = 0.07
@@ -507,3 +497,21 @@ inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23A"), thi
 inseason_ttl_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.21
 inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.40
 inseason_rch_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.20
+
+#All areas rch
+inseason_rch_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.19
+inseason_rch_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.14
+inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.17
+inseason_rch_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.13
+
+#All areas ttl  Use these for the bulletin 
+inseason_ttl_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.55 f: 107
+inseason_ttl_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 f: 100
+inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.52 f: 116
+inseason_ttl_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.60 f: 126
+
+#more All_areas don't put in the bulletin
+inseason_ttl_cpue(data = cpue, stat_week = c("83"), stat_area =  all_area, this_year = 2025) # r2 = 0.48 f: 121
+inseason_ttl_cpue(data = cpue, stat_week = c("84"), stat_area =  all_area, this_year = 2025) # r2 = 0.59 f: 
+inseason_ttl_cpue(data = cpue, stat_week = c("91"), stat_area =  all_area, this_year = 2025) # r2 = 0.33 f: 
+inseason_ttl_cpue(data = cpue, stat_week = c("8491"), stat_area =  all_area, this_year = 2025) # r2 = 0.68 f: 
