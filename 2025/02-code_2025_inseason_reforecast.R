@@ -13,6 +13,7 @@ library(ggpmisc)
 library(ggrepel)
 library(MLmetrics)
 
+options(scipen = 999)
 
 curr_year <- 2025
 
@@ -48,7 +49,8 @@ cpue <- read_excel(
       statsub %in% c("23H", "23Q", "23N", "123T") ~ "23Q+123T", 
       statsub == "23I" ~ "123R", # Changed in 2022
       TRUE ~ statsub
-    )
+    ),
+    year <- as.numeric(year)
   ) |>  
   summarise(
     .by = c(year, statsub, sw),
@@ -68,16 +70,14 @@ cpue <- read_excel(
   rowwise() |> 
   # Sum kept chinook and interviews across stat week periods
   mutate(
-    cum7183 = sum(c_across(`71`:`83`), na.rm = TRUE),
-    cum7184 = sum(c_across(`71`:`84`), na.rm = TRUE),
-    `8183` = sum(c_across(`81`:`83`), na.rm = TRUE),
-    `8184` = sum(c_across(`81`:`84`), na.rm = TRUE),
-    `8283` = sum(c_across(`82`:`83`), na.rm = TRUE),
-    `8284` = sum(c_across(`82`:`84`), na.rm = TRUE),
-    cum91 = sum(c_across(`83`:`91`), na.rm = TRUE),
-    cum92 = sum(c_across(`83`:`92`), na.rm = TRUE),
-    `8384` = sum(c_across(`83`:`84`), na.rm = TRUE),
-    `8491` = sum(c_across(`84`:`91`), na.rm = TRUE),
+    `8183` = sum(c(`81`, `82`, `83`),       na.rm = TRUE),
+    `8184` = sum(c(`81`, `82`, `83`, `84`), na.rm = TRUE),
+    `8283` = sum(c(`82`, `83`),             na.rm = TRUE),
+    `8284` = sum(c(`82`, `83`, `84`),       na.rm = TRUE),
+    `8391` = sum(c(`83`, `84`, `91`),       na.rm = TRUE),
+    `8392` = sum(c(`83`, `84`, `91`, `92`), na.rm = TRUE),
+    `8384` = sum(c(`83`, `84`),             na.rm = TRUE),
+    `8491` = sum(c(`84`, `91`),             na.rm = TRUE),
   ) |> 
   ungroup() |> 
   pivot_longer(
@@ -244,7 +244,7 @@ ggsave(
 # F: no data points
 # J: 0.07, K:0.01, M:<0.01, 
 #
-# R^2 of combinations of some areas for statweek 83
+# R^2 of combinations of some areas for statwk
 # Q-T: 0.50 but most folks catch Lingcod in area Q.
 #c("23C", "23J", "23E"), # R^2 = 0.55
 #c("23C", "23E", "23F", "23M", "23J", "23K", "23Q+123T"), #R^2 = 0.51
@@ -299,7 +299,7 @@ statwk_data <- data |>
     ttl_cpue = cn_all_k/boat_trips,
     rch_cpue = rch_cn_k/boat_trips
   )|> 
-#  filter(ttl_cpue > 0.05) # |> # took out values of CPUE close to 0. This inflates the R^2. 
+  filter(ttl_cpue > 0.05) # |> # took out values of CPUE close to 0. This inflates the R^2. 
 # In general if all subareas had 0 CPUE then it is either an anomoly, or
 # the particular stat areas might not be the best to use. 
 
@@ -485,6 +485,9 @@ inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23R"), this_
 inseason_rch_cpue(data = cpue, stat_week = c("84"), stat_area =  c("23Q+123T"), this_year = 2025)
 inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23Q+123T"), this_year = 2025)
 
+#L#ast years area:
+inseason_ttl_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23J", "23C", "23E"), this_year = 2025) # r2 = 0.46 m:.29 f: 68
+inseason_rch_cpue(data = cpue, stat_week = c("83"), stat_area =  c("23J", "23C", "23E"), this_year = 2025) # r2 = 0.55 m:.27 f: 69
 
 #Brads suggested areas
 inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23D", "23J", "23K"), this_year = 2025) # r2 = 0.07
@@ -504,14 +507,14 @@ inseason_rch_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, thi
 inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.17
 inseason_rch_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.13
 
-#All areas ttl  Use these for the bulletin 
-inseason_ttl_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.55 f: 107
-inseason_ttl_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 f: 100
-inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.52 f: 116
-inseason_ttl_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.60 f: 126
-
-#more All_areas don't put in the bulletin
-inseason_ttl_cpue(data = cpue, stat_week = c("83"), stat_area =  all_area, this_year = 2025) # r2 = 0.48 f: 121
-inseason_ttl_cpue(data = cpue, stat_week = c("84"), stat_area =  all_area, this_year = 2025) # r2 = 0.59 f: 
-inseason_ttl_cpue(data = cpue, stat_week = c("91"), stat_area =  all_area, this_year = 2025) # r2 = 0.33 f: 
+#All_areas ttl don't put in the bulletin
+inseason_ttl_cpue(data = cpue, stat_week = c("83"), stat_area =  all_area, this_year = 2025)   # r2 = 0.48 f: 121
+inseason_ttl_cpue(data = cpue, stat_week = c("84"), stat_area =  all_area, this_year = 2025)   # r2 = 0.59 f: 
+inseason_ttl_cpue(data = cpue, stat_week = c("91"), stat_area =  all_area, this_year = 2025)   # r2 = 0.33 f: 
 inseason_ttl_cpue(data = cpue, stat_week = c("8491"), stat_area =  all_area, this_year = 2025) # r2 = 0.68 f: 
+inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.52 m: .70 f: 116
+inseason_ttl_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.60 m: .47 f: 126
+
+#All areas ttl  Use these for the bulletin 
+inseason_ttl_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.55 m: .66 f: 107
+inseason_ttl_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 m: .54 f: 100
