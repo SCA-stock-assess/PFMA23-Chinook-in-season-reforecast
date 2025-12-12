@@ -14,7 +14,6 @@ library(ggrepel)
 library(MLmetrics)
 
 options(scipen = 999)
-
 curr_year <- 2025
 
 
@@ -50,7 +49,7 @@ cpue <- read_excel(
       statsub == "23I" ~ "123R", # Changed in 2022
       TRUE ~ statsub
     ),
-    year <- as.numeric(year)
+    year = as.numeric(year)
   ) |>  
   summarise(
     .by = c(year, statsub, sw),
@@ -72,6 +71,7 @@ cpue <- read_excel(
   mutate(
     `8183` = sum(c(`81`, `82`, `83`),       na.rm = TRUE),
     `8184` = sum(c(`81`, `82`, `83`, `84`), na.rm = TRUE),
+    `8191` = sum(c(`81`, `82`, `83`, `84`, `91`), na.rm = TRUE),
     `8283` = sum(c(`82`, `83`),             na.rm = TRUE),
     `8284` = sum(c(`82`, `83`, `84`),       na.rm = TRUE),
     `8391` = sum(c(`83`, `84`, `91`),       na.rm = TRUE),
@@ -230,7 +230,7 @@ ggsave(
   units = "in"
 )
 
-# New (2025)Week 83 model -----------------------------------------------------------
+# 2025 Week 83 & 84 model -----------------------------------------------------------
 
 
 # Many options were explored. Settled on all areas since it has a higher R^2 from other areas
@@ -279,7 +279,7 @@ ggsave(
 #Which uses the percent of rch estimated caught in that stat area(s) in previous years
 
 inseason_ttl_cpue <- function(data = cpue, 
-                     stat_week = c("83"),
+                     stat_week = c("8184"),
                      stat_area =  c("23A"),
                      this_year = curr_year, 
                      cpue_type = "ttl_cpue"){
@@ -500,6 +500,7 @@ inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23A"), thi
 inseason_ttl_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.21
 inseason_rch_cpue(data = cpue, stat_week = c("8283"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.40
 inseason_rch_cpue(data = cpue, stat_week = c("8284"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.20
+inseason_rch_cpue(data = cpue, stat_week = c("8184"), stat_area =  c("23A"), this_year = 2025) # r2 = 0.20
 
 #All areas rch
 inseason_rch_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.19
@@ -514,7 +515,10 @@ inseason_ttl_cpue(data = cpue, stat_week = c("91"), stat_area =  all_area, this_
 inseason_ttl_cpue(data = cpue, stat_week = c("8491"), stat_area =  all_area, this_year = 2025) # r2 = 0.68 f: 
 inseason_ttl_cpue(data = cpue, stat_week = c("8283"), stat_area =  all_area, this_year = 2025) # r2 = 0.52 m: .70 f: 116
 inseason_ttl_cpue(data = cpue, stat_week = c("8384"), stat_area =  all_area, this_year = 2025) # r2 = 0.60 m: .47 f: 126
+inseason_ttl_cpue(data = cpue, stat_week = c("8284"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 m: .54 f: 126
 
 #All areas ttl  Use these for the bulletin 
 inseason_ttl_cpue(data = cpue, stat_week = c("8183"), stat_area =  all_area, this_year = 2025) # r2 = 0.55 m: .66 f: 107
-inseason_ttl_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 m: .54 f: 100
+inseason_ttl_cpue(data = cpue, stat_week = c("8184"), stat_area =  all_area, this_year = 2025) # r2 = 0.61 m: .54 f: 117
+inseason_ttl_cpue(data = cpue, stat_week = c("8191"), stat_area =  all_area, this_year = 2025) # r2 = 0.67 m: .39 f: 123
+
