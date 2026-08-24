@@ -16,6 +16,8 @@ library(naniar)
 library(gtExtras)
 library(ggpmisc)
 library(ggrepel)
+library(ggmap)
+
 
 curr_year <- 2026
 
@@ -41,7 +43,7 @@ cpue <-  interview_summary |>
   filter(
     # Interviews w/these comments are valid and used to calculate CPUE
     asscd_txt %in% c("Adipose fin not chkd", "Complete Form", "Fish not seen for ID"), 
-    #keeps all 23 adn 123TRP
+    #keeps all 23 as well as corridor 123TRP
     str_detect(statsub, "^23[[:upper:]]|123(?=(T|R|P))") # 123 T, R, and P are the corridor
   ) |> # 
   # Combine subareas that were split over the years (sub area reconcilliation)
@@ -126,7 +128,7 @@ tmp <- set_names(subarea_combos,
 # Fit all possible predictors with lm and save
 cpue_long <- cpue |> 
   mutate(
-    return = na_if(return, "NA"),        # turn "NA" string into real NA
+   # return = na_if(return, "NA"),        # turn "NA" string into real NA
     return = as.numeric(return)          # convert to numeric
   ) |> 
   filter(!(is.na(cpue) | is.nan(cpue))) |> 
@@ -191,7 +193,7 @@ cpue_r2s |>
   ggplot(aes(period, subarea)) +
   facet_grid(correction ~ model, space = "free_y", scales = "free_y") +
   geom_tile(aes(fill = adj.r.squared)) +
-  scale_fill_viridis_c(option = "F", limits = c(0, 1)) +
+  scale_fill_viridis_c(option = "H", limits = c(0, 1)) +
   coord_cartesian(expand = FALSE)
 
 
@@ -221,32 +223,18 @@ creel_shp %>%
 
 # Save basemap
 library(ggmap)
-Barkley <- get_stadiamap(
-  bbox = c(left = -125.587, bottom = 48.753, right = -124.708, top = 49.145),
-  maptype = "stamen_terrain_background",
-  zoom = 11
-)
+ggmap::register_stadiamaps(key = "5e09d544-f654-4e99-b369-fa67ea4f60db")
+Barkley <- get_stadiamap(bbox = c(left = -125.587, bottom = 48.753, right = -124.708, top = 49.145), # Bounding box
+                         maptype = "stamen_terrain", 
+                         zoom = 11)
+
 ggmap::ggmap(Barkley)
 
-
-# NTR & SEAK recoveries model ---------------------------------------------
-
-bs_cn %>% 
-  ggplot(aes(SEAK_adults, Somass_term_adult_return)) +
-  stat_poly_line() +
-  stat_poly_eq(aes(label = paste(after_stat(eq.label),
-                                 after_stat(rr.label), sep = "*\", \"*"))) +
-  geom_point() +
-  scale_y_continuous(trans = "log10") +
-  scale_x_continuous(trans = "log10") +
-  labs(x = "Expanded CWT recoveries (log-transformed)",
-       y = "Somass terminal adult Chinook return\n(log-transformed)")
 
 
 # Week 82 CPUE model ----------------------------------------------
 bs_cn <- bs_cn |>
   mutate(
-    Somass_term_adult_return = na_if(Somass_term_adult_return, "NA"),
     Somass_term_adult_return = as.numeric(Somass_term_adult_return)
   )
 
