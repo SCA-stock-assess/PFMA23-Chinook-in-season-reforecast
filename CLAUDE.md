@@ -296,6 +296,31 @@ were deliberately cut after confirming they added cost without adding value:
   cpue`), so the trend line always reflects whatever model actually ends up
   picked, not an assumption that it'll be raw. Currently a non-issue only
   because the current season model happens to use raw CPUE.
+- **TODO: `interview_recoded`'s `asscd_txt` filter drops "Form Incomplete"
+  rows (2,333, ~2.7% of raw interviews) entirely** — out of both the catch
+  numerator AND the `boat_trips` effort denominator (`boat_trips = n()` of
+  the post-filter rows). Flagged during review, not yet resolved (2026-08-27):
+  need to confirm with whoever runs CREST whether "Form Incomplete" means
+  "boat was interviewed/fished but catch count is untrustworthy" (in which
+  case dropping it from `boat_trips` undercounts effort and biases CPUE) or
+  "no real interview took place" (in which case current handling is fine).
+- **TODO: CPUE is NOT restricted to Chinook-targeted trips.** Checked
+  directly (2026-08-27): of the 81,032 rows kept after the `asscd_txt`
+  filter, only ~30% have `target_species` containing "Chinook" alone (another
+  ~7% are mixed-target rows like "Chinook & Sockeye"), 44% have a blank/NA
+  `target_species`, and the rest target Sockeye/Halibut/Coho/Lingcod/Rockfish
+  etc. `cn_all_k`/`boat_trips` (and therefore `cpue`) are summed over ALL of
+  these regardless of what the trip was targeting — so CPUE mixes Chinook
+  catch rates across trips with very different targeting behavior. If the
+  mix of targeted species shifts over time or within a season (e.g. more
+  Sockeye-directed effort in a big Sockeye year), that would move CPUE
+  without any real change in Chinook abundance — a potential confound for a
+  model that assumes CPUE tracks Chinook abundance across 25+ years. Not
+  yet investigated whether restricting to Chinook-targeted (or Chinook-
+  inclusive) trips changes the retro MAPE ranking or the season model pick.
+  Note CLAUDE.md already records that an earlier "whole-fishery" theory in
+  the superseded report-figure script turned out wrong — worth checking
+  whether that's the same issue before assuming it is or isn't.
 
 ## Working with this repo across Claude Code sessions
 
