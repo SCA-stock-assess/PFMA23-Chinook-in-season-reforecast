@@ -4,72 +4,69 @@
 #
 #   SECTION A — MODEL SELECTION. Searches every 4-5 subarea combo x
 #   raw/RCH-corrected CPUE x 4 functional forms, for every stat-week period,
-#   then a genuine EXPANDING-WINDOW RETRO test decides ONE model for the
-#   whole season. Runs ONCE PER SEASON -- cached to disk
-#   (season_model_<year>.rds); re-running this script loads the cached pick
-#   instead of re-searching. Delete that file to force a fresh selection.
+#   then an expanding-window retro test picks ONE model for the whole
+#   season. Runs ONCE PER SEASON and caches to disk (season_model_<year>.rds);
+#   re-running this script loads the cached pick instead of re-searching.
+#   Delete that file to force a fresh selection.
 #
 #   Why retro MAPE, not in-sample adj.R^2: with thousands of combos tested,
 #   the top ~10 for any given period routinely land within thousandths of
-#   adj.R^2 of each other -- the in-sample "winner" is partly luck
-#   (multiple-comparisons noise). Checked directly against this dataset:
-#   the highest-in-sample-R^2 model anywhere (a cum91 combo, adj.R^2~0.84)
-#   retro-forecasts far worse than the season model once genuinely
-#   backtested chronologically (see SECTION C) -- higher in-sample fit did
-#   NOT mean better real forecasting power here.
+#   adj.R^2 of each other — the in-sample "winner" is partly multiple-
+#   comparisons noise. Confirmed on this dataset: the highest-in-sample-R^2
+#   model anywhere (a cum91 combo, adj.R^2~0.84) retro-forecasts far worse
+#   than the season model once genuinely backtested chronologically (see
+#   SECTION C). Higher in-sample fit did not mean better real forecasts.
 #
 #   SECTION B — WEEKLY FORECAST. Cheap. Takes the SAME selected model
 #   (fixed subareas/correction/functional form) and, for each stat-week
-#   milestone (83, cum84, cum91, cum92), just refits it with whatever data
-#   exists right now and forecasts curr_year. This is what changes week to
-#   week -- the model itself does not.
+#   (cum83, cum84, cum91, cum92), refits it against whatever data exists
+#   now and forecasts curr_year. This is what changes week to week — the
+#   model itself doesn't.
 #
-# Core CPUE/subarea-reconciliation logic is UNCHANGED from Nick Brown's
-# original -- verified correct.
+# Core CPUE/subarea-reconciliation logic is unchanged from Nick Brown's
+# original and has been verified correct.
 #
-# Fixes/discoveries folded in from this season's review:
-#   1. 2001 excluded (in-season management changes that year), applied
+# Fixes/discoveries from this season's review:
+#   1. 2001 is excluded (in-season management changes that year), applied
 #      consistently rather than only in the production script.
-#   2. DNA lookup table (CREEL DNA LU tab) previously listed corridor-area
-#      RCH proportions under OLD subarea codes (23I, 23N, 23P) while creel
+#   2. The DNA lookup table (CREEL DNA LU tab) listed corridor-area RCH
+#      proportions under OLD subarea codes (23I, 23N, 23P), while creel
 #      interviews have always used the CURRENT corridor codes (123R, 123T,
-#      123P) -- silently failing every RCH join for those three codes, for
+#      123P) — silently failing every RCH join for those three codes across
 #      all 26 years. Fixed in the workbook (DNA LU tab relabeled).
 #      Separately confirmed cn_all_k * prop_rch == rch_cn_k exactly for
-#      every interview row -- they're the same number computed two ways,
-#      not two different corrections.
-#   3. The combo search must test BOTH raw and RCH-corrected CPUE together,
-#      not one or the other -- the true top model can be either.
-#   4. PERIOD_WEEKS is defined ONCE below and used everywhere a period's
-#      constituent weeks matter: building `cpue`'s period columns AND the
-#      completeness guard in run_period_forecast()/retro_forecast(). This
-#      used to be two separately hand-typed lists -- they drifted out of
-#      sync once already (a missing "cum83" entry silently disabled a
-#      completeness guard), and Nick's original cum83 column used plain `+`
-#      while cum84/91/92 used na.rm = TRUE sum -- an inconsistency in what
-#      "cumulative" meant between periods. Both problems are structurally
-#      impossible now: one list, one consistent na.rm = TRUE rule.
-#   5. Cumulative periods sum constituent weeks with na.rm = TRUE, so a week
-#      that hasn't happened yet in the current season is silently treated as
-#      zero catch rather than missing -- which would quietly deflate an
-#      in-season forecast instead of failing loudly. The completeness guard
-#      in run_period_forecast()/retro_forecast() catches this independently
-#      by checking the raw interview data, not by relying on NA propagation
-#      in `cpue` -- don't remove it as "unnecessary."
+#      every interview row: they're the same number computed two ways, not
+#      two different corrections.
+#   3. The combo search must test raw and RCH-corrected CPUE together, not
+#      one or the other — the true top model could be either.
+#   4. PERIOD_WEEKS is now defined ONCE and used everywhere a period's
+#      constituent weeks matter: building cpue's period columns, and the
+#      completeness guard in run_period_forecast()/retro_forecast(). It
+#      used to be two hand-typed lists that had already drifted out of
+#      sync (a missing "cum83" entry silently disabled a completeness
+#      guard), and Nick's original cum83 column used plain `+` while
+#      cum84/91/92 used na.rm = TRUE sum — an inconsistency in what
+#      "cumulative" meant between periods. Both problems are now
+#      structurally impossible: one list, one na.rm = TRUE rule.
+#   5. Cumulative periods sum constituent weeks with na.rm = TRUE, so a
+#      week that hasn't happened yet this season is silently treated as
+#      zero catch rather than missing — quietly deflating an in-season
+#      forecast instead of failing loudly. The completeness guard in
+#      run_period_forecast()/retro_forecast() catches this independently
+#      by checking the raw interview data rather than relying on NA
+#      propagation in cpue — don't remove it as "unnecessary."
 #   6. Re-searching for "the best combo" every week is data dredging, not
-#      model improvement -- select once via retro-validation, hold it for
-#      the season, only refit with new data as it arrives.
+#      model improvement — select once via retro-validation, hold it for
+#      the season, and only refit with new data as it arrives.
 #   7. Selection is decided by genuine expanding-window retro MAPE (PART 2
-#      below), searched across EVERY period, not assumed to be one of the
-#      earliest-available ones ahead of time, and restricted to log-log
-#      form. Every non-log-log "winner" found while developing this was a
-#      low-quality-fit noise artifact (e.g. one had adj.R^2=0.42 yet won
-#      outright on raw retro MAPE) that only edged out its own log-log
-#      sibling by a margin nowhere near its R^2 gap -- noise, not signal.
-#      MIN_SEASON_ADJ_R2 and the log-log restriction guard against this.
-#      Don't "simplify" selection back to picking by raw retro MAPE alone
-#      or by R^2 alone without re-checking this.
-# ============================================================================
+#      below), searched across every period rather than assumed to favor
+#      an earliest-available one, and restricted to log-log form. Every
+#      non-log-log "winner" found during development was a low-quality-fit
+#      noise artifact (e.g. one had adj.R^2=0.42 yet won outright on raw
+#      retro MAPE), edging out its log-log sibling by a margin nowhere near
+#      its R^2 gap. MIN_SEASON_ADJ_R2 and the log-log restriction guard
+#      against this — don't simplify selection back to raw retro MAPE
+#      alone, or R^2 alone, without re-checking.
 
 library(tidyverse); theme_set(theme_bw(base_size = 16))
 library(readxl)
@@ -90,7 +87,7 @@ MIN_SEASON_ADJ_R2 <- 0.5
 SEASON_MODEL_PATH <- sprintf("season_model_%d.rds", curr_year)
 
 # ── Canonical period -> constituent-weeks map ──────────────────────────────
-# Single source of truth (see fix #4 above): used both to build `cpue`'s
+# Single source of truth: used both to build `cpue`'s
 # period columns below and as the completeness guard in SECTION B/C. Add a
 # new period here ONLY -- never hand-type a week list anywhere else.
 PERIOD_WEEKS <- list(
@@ -515,7 +512,8 @@ run_period_forecast <- function(period_label) {
 # "season-model retro MAPE" printed in its subtitle refer to the same period.
 
 results <- list(
-wk83only = run_period_forecast("83"),
+wk82only       = run_period_forecast("82"),
+wk83only       = run_period_forecast("83"),
 wk83Cum        = run_period_forecast("cum83"),
 wk84Cum        = run_period_forecast("cum84"),
 wk91Cum        = run_period_forecast("cum91"),
@@ -545,7 +543,7 @@ post_season_review <- map_df(names(results), function(nm) {
 
 print(post_season_review)
 # ── Save each weekly forecast plot ──────────────────────────────────────
-
+ggsave(sprintf("figures/%d_wk82only_forecast.png", curr_year), results$wk82only$plot, width = 9, height = 6, dpi = 300)
 ggsave(sprintf("figures/%d_wk83only_forecast.png", curr_year), results$wk83only$plot, width = 9, height = 6, dpi = 300)
 ggsave(sprintf("figures/%d_wk83Cum_forecast.png",  curr_year), results$wk83Cum$plot,  width = 9, height = 6, dpi = 300)
 #ggsave(sprintf("figures/%d_wk84Cum_forecast.png",  curr_year), results$wk84Cum$plot,  width = 9, height = 6, dpi = 300)
@@ -670,3 +668,30 @@ cat(sprintf(
          "retro-validated selection\n  over picking a model by R^2 alone -- see PART 2's full leaderboard for",
          " every period/combo\n  compared this way, not just this one illustrative pair.\n"),
   season_retro$mape * 100, cum91_retro$mape * 100, SEASON_MODEL$adj.r.squared))
+##############################################Trend in CPUE
+# Use the season model's own selected combo + period (SECTION A's pick) —
+# this is exactly what run_period_forecast() builds as `predictor_val`
+# when use_rch = FALSE, just kept as a full year-by-year series instead of
+# collapsing to one forecast point.
+combo_subareas <- str_split(SEASON_MODEL$combo, "_")[[1]]
+combo_period   <- SEASON_MODEL$period
+
+cpue_trend <- cpue |>
+  filter(period == combo_period, statsub %in% combo_subareas) |>
+  summarise(.by = year, across(c(cn_all_k, boat_trips), \(x) sum(x, na.rm = TRUE))) |>
+  mutate(cpue = cn_all_k / boat_trips) |>
+  filter(is.finite(cpue)) |>
+  arrange(year)
+
+ggplot(cpue_trend, aes(x = year, y = cpue)) +
+  geom_line(colour = "#333333", linewidth = 0.9) +
+  geom_point(colour = "#333333", size = 2) +
+  geom_point(data = filter(cpue_trend, year == curr_year), colour = "red", size = 3) +
+  geom_text_repel(aes(label = year), size = 3, min.segment.length = 0) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+  labs(
+    x = NULL, y = "CPUE (raw, pooled)",
+    title = paste0("Chinook raw CPUE trend — season model combo (",
+                   str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
+  ) +
+  theme_bw(base_size = 14)
