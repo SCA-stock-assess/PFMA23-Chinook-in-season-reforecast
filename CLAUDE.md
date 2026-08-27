@@ -172,6 +172,16 @@ were deliberately cut after confirming they added cost without adding value:
   data-completeness gap — it isn't one. (This was nearly misdiagnosed as a
   bug once — the row counts look alarming until you check the `region`
   field.)
+- **`23A`/`23B` (region `"Area 23 (Alberni Canal)"`) are correctly included,
+  not a bug.** `23A` alone is the single largest statsub in the whole
+  dataset (~32k rows, ~39% of everything the `asscd_txt` filter keeps) and
+  its `region` string says "Alberni Canal" rather than "Barkley" — looked
+  like the same class of mislabeling as the `123X` issue above (wrong area
+  hiding under a matching numeric prefix) when first spotted. It isn't:
+  Alberni Canal and Barkley Sound are both part of PFMA/Area 23, just two
+  different internal CREST location labels for the same management area.
+  Confirmed directly with the project owner (2026-08-27) — don't re-flag
+  this as a scope bug.
 - **Cumulative periods sum constituent weeks with `na.rm = TRUE`, applied
   consistently to every period now.** Early in the season, a week that
   hasn't happened yet is silently treated as zero catch rather than
