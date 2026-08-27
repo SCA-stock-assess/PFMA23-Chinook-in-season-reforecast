@@ -543,12 +543,24 @@ post_season_review <- map_df(names(results), function(nm) {
 
 print(post_season_review)
 # ── Save each weekly forecast plot ──────────────────────────────────────
+
+
 ggsave(sprintf("figures/%d_wk82only_forecast.png", curr_year), results$wk82only$plot, width = 9, height = 6, dpi = 300)
 ggsave(sprintf("figures/%d_wk83only_forecast.png", curr_year), results$wk83only$plot, width = 9, height = 6, dpi = 300)
 ggsave(sprintf("figures/%d_wk83Cum_forecast.png",  curr_year), results$wk83Cum$plot,  width = 9, height = 6, dpi = 300)
 #ggsave(sprintf("figures/%d_wk84Cum_forecast.png",  curr_year), results$wk84Cum$plot,  width = 9, height = 6, dpi = 300)
 #ggsave(sprintf("figures/%d_wk91Cum_forecast.png",  curr_year), results$wk91Cum$plot,  width = 9, height = 6, dpi = 300)
 #ggsave(sprintf("figures/%d_wk92Cum_forecast.png",  curr_year), results$wk92Cum$plot,  width = 9, height = 6, dpi = 300)
+
+#adhoc changes to the plot before saving (in case I want to remove extra info)
+
+p <- results$wk83Cum$plot +
+  labs(title = "Week 82 & 83",
+       x = "CPUE",
+       y = "Somass adult Chinook return")
+
+p
+ggsave("figures/2026_wk83Cum_forecast_clean.png", p, width = 9, height = 6, dpi = 300)
 # ============================================================================
 # SECTION C -- RETROSPECTIVE ANALYSIS / VISUALIZATION. Adapted from Nick
 # Brown's original (see e.g. 2022_CN_in-season_run_reforecast_models.R),
