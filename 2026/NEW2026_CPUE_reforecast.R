@@ -155,6 +155,18 @@ cpue_wide <- interview_recoded |>
   pivot_longer(cols = cn_all_k:boat_trips) |>
   pivot_wider(names_from = sw_2026, values_from = value)
 
+# TODO (2026-08-27): na.rm = TRUE here means a subarea/year with NO
+# interviews at all in one of this period's weeks silently contributes 0
+# for that week, indistinguishable from a real zero-catch week. Checked
+# directly for the season model's own subareas (23C/23E/23J/23M) x cum83
+# (weeks 82+83): 17 of ~24 fitted years (2000-2025, excl. 2001) have at
+# least one of those 4 subareas missing one of the two weeks -- i.e. most
+# of the SEASON_MODEL's own training data has this gap in some subarea.
+# The completeness guard below (see run_period_forecast()/retro_forecast())
+# only checks year == curr_year -- it protects the live in-season forecast
+# but does NOT check the historical/training years fit here. Not yet
+# quantified how much this actually moves pooled CPUE or the retro-MAPE
+# ranking -- investigate before trusting a close retro-MAPE margin.
 period_cols <- map_dfc(PERIOD_WEEKS, ~ rowSums(select(cpue_wide, all_of(as.character(.x))), na.rm = TRUE))
 
 cpue <- cpue_wide |>
@@ -167,6 +179,11 @@ cpue <- cpue_wide |>
 # Complete-case only: needs a real CPUE AND a known return to fit against.
 # curr_year rows drop out automatically (return is NA -- it's the forecast
 # target, not yet observed).
+# TODO (2026-08-27): "complete" here only means cn_all_k/boat_trips are
+# non-NA -- a row zero-filled by the na.rm = TRUE gap above (see
+# period_cols) is NOT NA, so it passes this filter and enters model fitting
+# looking like a genuinely complete period. This is the step where that
+# silent gap actually becomes training data.
 cpue_minimal <- cpue |>
   filter(!if_any(c(return, cn_all_k, boat_trips), is.na)) |>
   select(year, period, cn_all_k, boat_trips, rch_cn_k, statsub, return)
