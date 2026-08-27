@@ -287,6 +287,15 @@ were deliberately cut after confirming they added cost without adding value:
 - The report-figure reconstruction script (`04-code_2026_report-figure8.R`,
   if it still exists in `2026/`) was built on an earlier "whole-fishery"
   theory that turned out to be wrong. Superseded — don't use it as reference.
+- **TODO: `cpue_trend` plot (end of script, after SECTION B) always uses raw
+  CPUE**, hardcoded to `cn_all_k / boat_trips` regardless of whether
+  `SEASON_MODEL$correction` is `"raw"` or `"corrected"`. Known, intentionally
+  left as-is for now (2026-08-27) — flagged during review, not yet fixed.
+  Should instead follow `SEASON_MODEL$correction` the same way
+  `run_period_forecast()`'s `predictor_val` does (`if (use_rch) rch_cpue else
+  cpue`), so the trend line always reflects whatever model actually ends up
+  picked, not an assumption that it'll be raw. Currently a non-issue only
+  because the current season model happens to use raw CPUE.
 
 ## Working with this repo across Claude Code sessions
 
