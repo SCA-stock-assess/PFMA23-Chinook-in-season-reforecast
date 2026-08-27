@@ -50,9 +50,11 @@ year's workbook without checking column names first.
 
 2. **SECTION B — weekly forecast.** Cheap. Takes the cached model's fixed
    subareas/correction/functional form and, for each stat-week milestone
-   (wk83only, wk83Cum = cum83, wk84Cum, wk91Cum, wk92Cum), refits it with
-   whatever data exists and forecasts the current year. This is what changes
-   week to week — the model choice does not.
+   (wk82only, wk83only, wk83Cum = cum83, wk84Cum, wk91Cum, wk92Cum), refits
+   it with whatever data exists and forecasts the current year. This is what
+   changes week to week — the model choice does not. `wk82only` (period
+   `"82"`) was added later in the season as an even-earlier single-week
+   look, same caveat as `wk83only` below re: its subtitle's MAPE line.
 
    `wk83only` (period `"83"`, single week) and `wk83Cum` (period `"cum83"`,
    weeks 82+83) are BOTH in the `results` list on purpose, not a duplicate —
@@ -73,6 +75,22 @@ year's workbook without checking column names first.
    Rows are skipped (not NA-filled) for any period `curr_year` hasn't
    reached yet, via the same `forecast IS NULL` check `run_period_forecast()`
    already uses.
+
+   Right after SECTION B's `ggsave()` calls, two more ad-hoc additions live
+   inline in the script (not inside `run_period_forecast()`):
+   - A **CPUE trend plot** — `cpue_trend`, plotted but not saved to
+     `figures/` — showing raw (always raw, regardless of `SEASON_MODEL`'s
+     correction) pooled CPUE by year for the season model's own
+     combo+period, i.e. the same `predictor_val` series `run_period_forecast()`
+     fits against, just shown as a full history instead of collapsed to one
+     forecast point.
+   - A **restyled copy of the `wk83Cum` figure** (`figures/2026_wk83Cum_forecast_clean.png`),
+     built by taking `results$wk83Cum$plot` and adding `+ labs(...)` to
+     override title/axis labels — the ad-hoc pattern for cleaning up a
+     figure's title/axis text without editing `run_period_forecast()`
+     itself (any `labs()` field you don't name is left as the function
+     built it). Copy this pattern for other periods rather than adding new
+     labelling parameters to the function.
 
 3. **SECTION C — retrospective analysis / visualization.** `retro_forecast()`
    is the same expanding-window backtest as SECTION A's `retro_ols()`, just
