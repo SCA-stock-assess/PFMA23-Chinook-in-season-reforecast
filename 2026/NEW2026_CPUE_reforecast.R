@@ -160,8 +160,14 @@ cpue_wide <- interview_recoded |>
 
 # Sums each period's weeks; a week with zero interviews just drops out
 # (omitted, not zero-filled) -- most training years have this gap in >=1
-# subarea, see CLAUDE.md's na.rm note.
-period_cols <- map_dfc(PERIOD_WEEKS, ~ rowSums(select(cpue_wide, all_of(as.character(.x))), na.rm = TRUE))
+# subarea, see CLAUDE.md's na.rm note. Same NA-guard as cpue_wide: if EVERY
+# week in a period is NA for a row (e.g. rch_cn_k across a whole period for
+# a subarea with no RCH data), stay NA instead of rowSums(na.rm=TRUE)
+# reintroducing the fake-0 bug one step later.
+period_cols <- map_dfc(PERIOD_WEEKS, function(weeks) {
+  wk <- select(cpue_wide, all_of(as.character(weeks)))
+  if_else(rowSums(!is.na(wk)) == 0, NA_real_, rowSums(wk, na.rm = TRUE))
+})
 
 cpue <- cpue_wide |>
   select(year, statsub, return, name) |>
@@ -172,12 +178,9 @@ cpue <- cpue_wide |>
 
 # Complete-case only: needs a real CPUE AND a known return to fit against.
 # curr_year rows drop out automatically (return is NA -- it's the forecast
-# target, not yet observed).
-# TODO (2026-08-27): "complete" here only means cn_all_k/boat_trips are
-# non-NA -- a row zero-filled by the na.rm = TRUE gap above (see
-# period_cols) is NOT NA, so it passes this filter and enters model fitting
-# looking like a genuinely complete period. This is the step where that
-# silent gap actually becomes training data.
+# target, not yet observed). A subarea/period with zero interviews some
+# weeks still passes as a real (partial) period -- see CLAUDE.md's na.rm
+# note; not fixable by requiring full completeness (leaves too little data).
 cpue_minimal <- cpue |>
   filter(!if_any(c(return, cn_all_k, boat_trips), is.na)) |>
   select(year, period, cn_all_k, boat_trips, rch_cn_k, statsub, return)
