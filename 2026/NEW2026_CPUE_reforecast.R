@@ -736,3 +736,37 @@ ggplot(cpue_trend, aes(x = year, y = boat_trips)) +
                    str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
   ) +
   theme_bw(base_size = 14)
+
+# CPUE across years AND individual stat-weeks (not collapsed to cum83) --
+# cpue_trend above shows one period's CPUE by year; this shows all 5 single
+# weeks (82/83/84/91/92) side by side, same subareas/correction as the
+# season model, to see whether within-season week-to-week movement looks
+# systematic or just noisy.
+cpue_by_week <- cpue |>
+  filter(period %in% c("82", "83", "84", "91", "92"), statsub %in% combo_subareas) |>
+  summarise(.by = c(year, period), across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
+  mutate(cpue = if (combo_use_rch) rch_cn_k / boat_trips else cn_all_k / boat_trips,
+         period = factor(period, levels = c("82", "83", "84", "91", "92"))) |>
+  filter(is.finite(cpue))
+
+ggplot(cpue_by_week, aes(x = year, y = cpue, colour = period)) +
+  geom_line(linewidth = 0.7) +
+  geom_point(size = 1.5) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+  scale_colour_brewer(palette = "Dark2", name = "Stat week") +
+  labs(x = NULL, y = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ")"),
+       title = paste0("Weekly CPUE by year — season model combo (",
+                      str_replace_all(SEASON_MODEL$combo, "_", "+"), ")")) +
+  theme_bw(base_size = 14)
+
+# Same data as a year x week heatmap -- easier to spot a systematic
+# within-season pattern (e.g. CPUE consistently rising/falling week to
+# week) than the overlapping line plot above.
+ggplot(cpue_by_week, aes(x = year, y = period, fill = cpue)) +
+  geom_tile(colour = "white") +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+  scale_fill_viridis_c(name = paste0("CPUE\n(", if (combo_use_rch) "RCH-corrected" else "raw", ")")) +
+  labs(x = NULL, y = "Stat week",
+       title = paste0("CPUE heatmap — season model combo (",
+                      str_replace_all(SEASON_MODEL$combo, "_", "+"), ")")) +
+  theme_bw(base_size = 14)
