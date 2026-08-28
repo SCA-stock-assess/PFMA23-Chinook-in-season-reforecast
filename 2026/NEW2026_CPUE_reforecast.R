@@ -146,10 +146,11 @@ interview_recoded <- interview_summary |>
 # NA instead of sum(..., na.rm=TRUE) silently reporting a fake 0 (see
 # CLAUDE.md's na.rm note for the full story).
 cpue_wide <- interview_recoded |>
+  group_by(year, statsub, sw_2026) |>
   summarise(
-    .by = c(year, statsub, sw_2026),
-    across(c(cn_all_k, rch_cn_k), \(x) if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)),
-    boat_trips = n()
+    across(c(cn_all_k, rch_cn_k), function(x) if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)),
+    boat_trips = n(),
+    .groups = "drop"
   ) |>
   left_join(select(bs_cn, year, "Somass_term_adult_return"), by = "year") |>
   rename("return" = "Somass_term_adult_return") |>
