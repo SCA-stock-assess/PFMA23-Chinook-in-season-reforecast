@@ -140,13 +140,15 @@ interview_recoded <- interview_summary |>
   )
 
 # ── Collapse to (year, statsub, period) CPUE, incl. cumulative periods ─────
-# Every period in PERIOD_WEEKS (single week and cumulative alike) is built
-# the same way -- rowSums(..., na.rm = TRUE) across that period's weeks --
-# so "cumulative 83" means the same thing everywhere this script uses it.
+# Collapse to (year, statsub, week) totals, then reshape wide by week so
+# period_cols below can sum any period's weeks together consistently.
+# NA-guarded: a subarea/week with no RCH data at all (23G/23H/23L) stays
+# NA instead of sum(..., na.rm=TRUE) silently reporting a fake 0 (see
+# CLAUDE.md's na.rm note for the full story).
 cpue_wide <- interview_recoded |>
   summarise(
     .by = c(year, statsub, sw_2026),
-    across(c(cn_all_k, rch_cn_k), \(x) sum(x, na.rm = TRUE)),
+    across(c(cn_all_k, rch_cn_k), \(x) if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)),
     boat_trips = n()
   ) |>
   left_join(select(bs_cn, year, "Somass_term_adult_return"), by = "year") |>
@@ -155,18 +157,9 @@ cpue_wide <- interview_recoded |>
   pivot_longer(cols = cn_all_k:boat_trips) |>
   pivot_wider(names_from = sw_2026, values_from = value)
 
-# TODO (2026-08-27): na.rm = TRUE here means a subarea/year with NO
-# interviews at all in one of this period's weeks silently contributes 0
-# for that week, indistinguishable from a real zero-catch week. Checked
-# directly for the season model's own subareas (23C/23E/23J/23M) x cum83
-# (weeks 82+83): 17 of ~24 fitted years (2000-2025, excl. 2001) have at
-# least one of those 4 subareas missing one of the two weeks -- i.e. most
-# of the SEASON_MODEL's own training data has this gap in some subarea.
-# The completeness guard below (see run_period_forecast()/retro_forecast())
-# only checks year == curr_year -- it protects the live in-season forecast
-# but does NOT check the historical/training years fit here. Not yet
-# quantified how much this actually moves pooled CPUE or the retro-MAPE
-# ranking -- investigate before trusting a close retro-MAPE margin.
+# Sums each period's weeks; a week with zero interviews just drops out
+# (omitted, not zero-filled) -- most training years have this gap in >=1
+# subarea, see CLAUDE.md's na.rm note.
 period_cols <- map_dfc(PERIOD_WEEKS, ~ rowSums(select(cpue_wide, all_of(as.character(.x))), na.rm = TRUE))
 
 cpue <- cpue_wide |>
