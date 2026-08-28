@@ -749,11 +749,11 @@ cpue_by_week <- cpue |>
          period = factor(period, levels = c("82", "83", "84", "91", "92"))) |>
   filter(is.finite(cpue))
 
-ggplot(cpue_by_week, aes(x = year, y = cpue, colour = period)) +
-  geom_line(linewidth = 0.7) +
-  geom_point(size = 1.5) +
+ggplot(cpue_by_week, aes(x = year, y = cpue)) +
+  geom_line(colour = "#333333", linewidth = 0.7) +
+  geom_point(colour = "#333333", size = 1.5) +
+  facet_wrap(~ period, ncol = 1, labeller = labeller(period = ~ paste("Week", .))) +
   scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
-  scale_colour_brewer(palette = "Dark2", name = "Stat week") +
   labs(x = NULL, y = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ")"),
        title = paste0("Weekly CPUE by year — season model combo (",
                       str_replace_all(SEASON_MODEL$combo, "_", "+"), ")")) +
