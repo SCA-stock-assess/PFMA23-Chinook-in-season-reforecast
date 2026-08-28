@@ -50,9 +50,11 @@ year's workbook without checking column names first.
 
 2. **SECTION B — weekly forecast.** Cheap. Takes the cached model's fixed
    subareas/correction/functional form and, for each stat-week milestone
-   (wk83only, wk83Cum = cum83, wk84Cum, wk91Cum, wk92Cum), refits it with
-   whatever data exists and forecasts the current year. This is what changes
-   week to week — the model choice does not.
+   (wk82only, wk83only, wk83Cum = cum83, wk84Cum, wk91Cum, wk92Cum), refits
+   it with whatever data exists and forecasts the current year. This is what
+   changes week to week — the model choice does not. `wk82only` (period
+   `"82"`) was added later in the season as an even-earlier single-week
+   look, same caveat as `wk83only` below re: its subtitle's MAPE line.
 
    `wk83only` (period `"83"`, single week) and `wk83Cum` (period `"cum83"`,
    weeks 82+83) are BOTH in the `results` list on purpose, not a duplicate —
@@ -73,6 +75,22 @@ year's workbook without checking column names first.
    Rows are skipped (not NA-filled) for any period `curr_year` hasn't
    reached yet, via the same `forecast IS NULL` check `run_period_forecast()`
    already uses.
+
+   Right after SECTION B's `ggsave()` calls, two more ad-hoc additions live
+   inline in the script (not inside `run_period_forecast()`):
+   - A **CPUE trend plot** — `cpue_trend`, plotted but not saved to
+     `figures/` — showing raw (always raw, regardless of `SEASON_MODEL`'s
+     correction) pooled CPUE by year for the season model's own
+     combo+period, i.e. the same `predictor_val` series `run_period_forecast()`
+     fits against, just shown as a full history instead of collapsed to one
+     forecast point.
+   - A **restyled copy of the `wk83Cum` figure** (`figures/2026_wk83Cum_forecast_clean.png`),
+     built by taking `results$wk83Cum$plot` and adding `+ labs(...)` to
+     override title/axis labels — the ad-hoc pattern for cleaning up a
+     figure's title/axis text without editing `run_period_forecast()`
+     itself (any `labs()` field you don't name is left as the function
+     built it). Copy this pattern for other periods rather than adding new
+     labelling parameters to the function.
 
 3. **SECTION C — retrospective analysis / visualization.** `retro_forecast()`
    is the same expanding-window backtest as SECTION A's `retro_ols()`, just
@@ -114,7 +132,11 @@ were deliberately cut after confirming they added cost without adding value:
 
 - **Single-subarea search** (`cpue_r2s`, a `fast_ols()` pass over individual
   subareas). Existed only to show "pooling beats a single subarea," which
-  was never in question and never fed into `SEASON_MODEL` selection.
+  was never in question and never fed into `SEASON_MODEL` selection. The
+  `fast_ols()` function itself outlived this removal as dead code (never
+  called — `combo_r2s`'s inline vectorized computation does the same math
+  for the search PART 1 actually uses) until it was deleted during the
+  2026-08-28 review pass.
 - **LOOCV** (`loocv_ols()`, `loocv_r2s`). Useful once, as the tool that
   first revealed retro MAPE and LOOCV MAPE could diverge sharply for the
   same model (the cum91 case above) — but it was never the deciding
@@ -154,6 +176,16 @@ were deliberately cut after confirming they added cost without adding value:
   data-completeness gap — it isn't one. (This was nearly misdiagnosed as a
   bug once — the row counts look alarming until you check the `region`
   field.)
+- **`23A`/`23B` (region `"Area 23 (Alberni Canal)"`) are correctly included,
+  not a bug.** `23A` alone is the single largest statsub in the whole
+  dataset (~32k rows, ~39% of everything the `asscd_txt` filter keeps) and
+  its `region` string says "Alberni Canal" rather than "Barkley" — looked
+  like the same class of mislabeling as the `123X` issue above (wrong area
+  hiding under a matching numeric prefix) when first spotted. It isn't:
+  Alberni Canal and Barkley Sound are both part of PFMA/Area 23, just two
+  different internal CREST location labels for the same management area.
+  Confirmed directly with the project owner (2026-08-27) — don't re-flag
+  this as a scope bug.
 - **Cumulative periods sum constituent weeks with `na.rm = TRUE`, applied
   consistently to every period now.** Early in the season, a week that
   hasn't happened yet is silently treated as zero catch rather than
@@ -161,8 +193,63 @@ were deliberately cut after confirming they added cost without adding value:
   failing loudly. The completeness guard in `run_period_forecast()` /
   `retro_forecast()` checks curr_year actually has interviews for every
   week a period needs before forecasting, and skips (with a `warning()`)
-  otherwise — this guard is the actual safety net, independent of how
-  `cpue`'s columns handle NAs. Don't remove it as "unnecessary."
+  otherwise — this guard only checks `year == curr_year` (protects the live
+  forecast) and only checks whether ANY of the season model's subareas has
+  that week (not every one) — both intentional, don't tighten either
+  without re-reading the investigation below first.
+  **Investigated thoroughly (2026-08-28), since this TODO used to just say
+  "not yet quantified":**
+  - 21 of 25 fitted training years (2000-2025, excl. 2001) have >=1 of the
+    season model's own 4 subareas (23C/23E/23J/23M) missing >=1 of `cum83`'s
+    two weeks; only 4/25 years (2002/2004/2006/2022) have a fully complete
+    4-subarea x 2-week grid.
+  - Requiring full completeness is not viable: fitting on just those 4
+    years gives R² ≈ 0.04 (n far too small to mean anything).
+  - A blunter "fix" — dropping a subarea's *whole-year* contribution
+    whenever it's missing either week, instead of just omitting the
+    missing week — is WORSE, not better: retro-fit R² drops from 0.82 to
+    0.23, because it guts trip counts in already-thin years (2010:
+    11→2 trips, 2012: 3→0, 2014: 7→4), trading a mild representativeness
+    issue for much larger variance.
+  - **Conclusion: this is not a bug to "fix" by enforcing completeness** —
+    with a creel survey this size, opportunistic pooling across whatever
+    subarea-weeks actually got sampled is close to necessary. Don't re-flag
+    this or try to make the completeness guard check every training year or
+    every subarea individually — both were tried by hand and made things
+    worse.
+  - **The real, still-open risk found instead: every OLS fit in this
+    script (`retro_ols`, `combo_r2s`'s inline computation, and the final
+    `lm()` refit) is UNWEIGHTED**, even though training-year trip counts
+    span roughly 3 (2012) to 178 — a year's CPUE built from 3 interviews
+    gets identical regression leverage to one built from 178. Not yet
+    addressed. The "Sampling effort by year" plot at the end of the script
+    (added 2026-08-28, right after `cpue_trend`) exists specifically to
+    make this visible — check it before trusting a close retro-MAPE margin.
+- **`sum(x, na.rm = TRUE)` treats an all-`NA` group as a literal `0`, not
+  `NA` — a separate, sharper bug found and fixed 2026-08-28.** Subareas
+  23G/23H/23L have NO RCH/DNA data at all (100% `NA` `rch_cn_k`, confirmed
+  directly against the workbook). Before the fix, summing across an all-`NA`
+  group — e.g. the merged `23O+123P`/`23Q+123T` subareas in roughly
+  2000-2010, before the DNA program existed — silently produced a
+  *fabricated* `rch_cpue = 0`, indistinguishable from "we surveyed this and
+  found zero RCH-attributed Chinook," instead of `NA` ("we don't know").
+  Concretely reproduced: `23O+123P` in 2000 has real, nonzero catch (29)
+  and trips (13) in `cum83`'s two weeks, but `rch_cn_k` was coming out as a
+  fake `0` instead of `NA`. Fixed via a shared `sum_or_na()` helper (see
+  the R-conventions bullet below) applied everywhere `cn_all_k`/`rch_cn_k`/
+  `boat_trips` get summed: `cpue_wide`, `period_cols`, `combo_cpue`
+  (PART 1), and the season-model refit `series` in
+  `run_period_forecast()`/`retro_forecast()`/`cpue_trend`. Only affects
+  RCH-corrected candidates touching the merged `23O+123P`/`23Q+123T`
+  subareas — the actual `SEASON_MODEL` (raw CPUE, `23C+23E+23J+23M`) never
+  had an all-`NA` group and was unaffected by construction (traced through
+  the math by hand), **confirmed empirically 2026-08-28**: deleted
+  `season_model_2026.rds` and ran the full script fresh (real R, real
+  workbook) — landed on the exact same combo/period/form/correction/MAPE/
+  adj.R²/n as before the fix (`23C+23E+23J+23M`, `cum83`, raw, log-log,
+  16.3%, 0.821, n=16). Full script also ran end-to-end with no errors
+  (SECTION A/B/C, the corrected `cpue_trend`, and the new sampling-effort
+  plot all executed cleanly).
 - **`PERIOD_WEEKS` is defined exactly once**, near the top of the script,
   and used both to build every column in `cpue` and as the completeness
   guard everywhere else. This used to be two separately hand-typed lists
@@ -196,14 +283,20 @@ were deliberately cut after confirming they added cost without adding value:
 
 - `tidyverse` + native pipe `|>` throughout, not magrittr `%>%` (except in
   older pre-2026 scripts, which still use `%>%`).
-- Closed-form OLS (`fast_ols()` / `retro_ols()`) instead of `lm()` for
-  brute-force searches at scale — same math as `lm(y ~ x)`, no
-  formula/model-frame overhead. `retro_ols()` loops per forecast-year (no
-  closed-form shortcut exists for an expanding window) but is cheap enough
-  per-candidate that the full search still finishes in roughly a minute.
-  Only refit with actual `lm()` once a single model has been selected, so
-  `predict(..., interval = "pred")` can hand back a real prediction
-  interval.
+- Closed-form OLS (`combo_r2s`'s inline vectorized computation / `retro_ols()`)
+  instead of `lm()` for brute-force searches at scale — same math as
+  `lm(y ~ x)`, no formula/model-frame overhead. `retro_ols()` loops per
+  forecast-year (no closed-form shortcut exists for an expanding window)
+  but is cheap enough per-candidate that the full search still finishes in
+  roughly a minute. Only refit with actual `lm()` once a single model has
+  been selected, so `predict(..., interval = "pred")` can hand back a real
+  prediction interval.
+- **`sum_or_na()`** (defined near the top, before first use) wraps
+  `sum(x, na.rm = TRUE)` everywhere `cn_all_k`/`rch_cn_k`/`boat_trips` get
+  summed, so an all-`NA` group propagates `NA` instead of the R default of
+  a fabricated `0` — see the na.rm bullet below for why this matters. Use
+  it (not a bare `sum(..., na.rm = TRUE)`) for any new aggregation over
+  these columns.
 - **Always qualify `scales::comma()` / `scales::percent()` explicitly.**
   Bare `comma()`/`percent()` only resolves if `library(scales)` happened to
   already run in that exact R session — easy to break by sourcing a script
@@ -269,6 +362,37 @@ were deliberately cut after confirming they added cost without adding value:
 - The report-figure reconstruction script (`04-code_2026_report-figure8.R`,
   if it still exists in `2026/`) was built on an earlier "whole-fishery"
   theory that turned out to be wrong. Superseded — don't use it as reference.
+- **FIXED (2026-08-28): `cpue_trend` plot (end of script, after SECTION C)
+  now follows `SEASON_MODEL$correction`** the same way `run_period_forecast()`'s
+  `predictor_val` does, instead of being hardcoded to raw `cn_all_k /
+  boat_trips`. No visible change to this season's output (the season model
+  happens to use raw CPUE), but it won't silently mislabel a future
+  RCH-corrected season model's trend as raw.
+- **TODO: `interview_recoded`'s `asscd_txt` filter drops "Form Incomplete"
+  rows (2,333, ~2.7% of raw interviews) entirely** — out of both the catch
+  numerator AND the `boat_trips` effort denominator (`boat_trips = n()` of
+  the post-filter rows). Flagged during review, not yet resolved (2026-08-27):
+  need to confirm with whoever runs CREST whether "Form Incomplete" means
+  "boat was interviewed/fished but catch count is untrustworthy" (in which
+  case dropping it from `boat_trips` undercounts effort and biases CPUE) or
+  "no real interview took place" (in which case current handling is fine).
+- **TODO: CPUE is NOT restricted to Chinook-targeted trips.** Checked
+  directly (2026-08-27): of the 81,032 rows kept after the `asscd_txt`
+  filter, only ~30% have `target_species` containing "Chinook" alone (another
+  ~7% are mixed-target rows like "Chinook & Sockeye"), 44% have a blank/NA
+  `target_species`, and the rest target Sockeye/Halibut/Coho/Lingcod/Rockfish
+  etc. `cn_all_k`/`boat_trips` (and therefore `cpue`) are summed over ALL of
+  these regardless of what the trip was targeting — so CPUE mixes Chinook
+  catch rates across trips with very different targeting behavior. If the
+  mix of targeted species shifts over time or within a season (e.g. more
+  Sockeye-directed effort in a big Sockeye year), that would move CPUE
+  without any real change in Chinook abundance — a potential confound for a
+  model that assumes CPUE tracks Chinook abundance across 25+ years. Not
+  yet investigated whether restricting to Chinook-targeted (or Chinook-
+  inclusive) trips changes the retro MAPE ranking or the season model pick.
+  Note CLAUDE.md already records that an earlier "whole-fishery" theory in
+  the superseded report-figure script turned out wrong — worth checking
+  whether that's the same issue before assuming it is or isn't.
 
 ## Working with this repo across Claude Code sessions
 

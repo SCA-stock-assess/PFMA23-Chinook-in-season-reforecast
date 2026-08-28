@@ -67,6 +67,20 @@
 #      its R^2 gap. MIN_SEASON_ADJ_R2 and the log-log restriction guard
 #      against this — don't simplify selection back to raw retro MAPE
 #      alone, or R^2 alone, without re-checking.
+#   8. sum(x, na.rm = TRUE) treats an all-NA group as a literal 0, not NA.
+#      This was silently turning "no RCH/DNA data exists for this subarea"
+#      (23G/23H/23L, ~2000-2010) into a fabricated rch_cpue = 0 wherever an
+#      RCH-corrected sum was computed. Fixed via one shared sum_or_na()
+#      helper (defined below, before first use) used everywhere cn_all_k/
+#      rch_cn_k/boat_trips get summed: cpue_wide, period_cols, combo_cpue,
+#      and the season-model refit series in SECTION B/C. Only affected
+#      RCH-corrected candidates touching the merged 23O+123P/23Q+123T
+#      subareas — the actual SEASON_MODEL (raw CPUE, 23C+23E+23J+23M) was
+#      never affected. See CLAUDE.md's na.rm note for the full
+#      investigation, including the separate (still-open, not "fixable" by
+#      requiring completeness) per-subarea coverage gap and why every OLS
+#      fit here remains unweighted despite training-year trip counts
+#      spanning roughly 3-178.
 
 library(tidyverse); theme_set(theme_bw(base_size = 16))
 library(readxl)
@@ -104,6 +118,12 @@ PERIOD_WEEKS <- list(
   "8491"  = c(84, 91)
 )
 
+# sum(x, na.rm=TRUE) returns 0 (not NA) when every value is NA -- silently
+# turns "unknown" into "genuinely zero". Used everywhere cn_all_k/rch_cn_k/
+# boat_trips get summed, since rch_cn_k is 100% NA for subareas with no
+# RCH/DNA data 
+sum_or_na <- function(x) if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
+
 # ── Load data ───────────────────────────────────────────────────────────
 interview_summary <- read_xlsx("CN_return_predictors_assemblyMaster.xlsx",
                                sheet = "CREEL Interview Summary 2026") |>
@@ -111,7 +131,7 @@ interview_summary <- read_xlsx("CN_return_predictors_assemblyMaster.xlsx",
 
 bs_cn <- read_xlsx("CN_return_predictors_assemblyMaster.xlsx",
                    sheet = "CN_return_predictors") |>
-  select(year, matches("(?i)Somass")) |>
+  select(year, Somass_term_adult_return) |>
   mutate(Somass_term_adult_return = round(as.numeric(Somass_term_adult_return), digits = 0))
 # as.numeric() turns curr_year's "NA" string into a real NA, letting it flow
 # through as a genuine forecast target (no return to fit against) with no
@@ -140,14 +160,16 @@ interview_recoded <- interview_summary |>
   )
 
 # ── Collapse to (year, statsub, period) CPUE, incl. cumulative periods ─────
-# Every period in PERIOD_WEEKS (single week and cumulative alike) is built
-# the same way -- rowSums(..., na.rm = TRUE) across that period's weeks --
-# so "cumulative 83" means the same thing everywhere this script uses it.
+# Collapse to (year, statsub, week) totals, then reshape wide by week so
+# period_cols below can sum any period's weeks together consistently.
+# NA-guarded: a subarea/week with no RCH data at all (23G/23H/23L) stays
+# NA instead of sum(..., na.rm=TRUE) silently reporting a fake 0 (see
 cpue_wide <- interview_recoded |>
+  group_by(year, statsub, sw_2026) |>
   summarise(
-    .by = c(year, statsub, sw_2026),
-    across(c(cn_all_k, rch_cn_k), \(x) sum(x, na.rm = TRUE)),
-    boat_trips = n()
+    across(c(cn_all_k, rch_cn_k), sum_or_na),
+    boat_trips = n(),
+    .groups = "drop"
   ) |>
   left_join(select(bs_cn, year, "Somass_term_adult_return"), by = "year") |>
   rename("return" = "Somass_term_adult_return") |>
@@ -155,7 +177,16 @@ cpue_wide <- interview_recoded |>
   pivot_longer(cols = cn_all_k:boat_trips) |>
   pivot_wider(names_from = sw_2026, values_from = value)
 
-period_cols <- map_dfc(PERIOD_WEEKS, ~ rowSums(select(cpue_wide, all_of(as.character(.x))), na.rm = TRUE))
+# Sums each period's weeks; a week with zero interviews just drops out
+# (omitted, not zero-filled) -- most training years have this gap in >=1
+# subarea, see CLAUDE.md's na.rm note. Same NA-guard as cpue_wide: if EVERY
+# week in a period is NA for a row (e.g. rch_cn_k across a whole period for
+# a subarea with no RCH data), stay NA instead of rowSums(na.rm=TRUE)
+# reintroducing the fake-0 bug one step later.
+period_cols <- map_dfc(PERIOD_WEEKS, function(weeks) {
+  wk <- select(cpue_wide, all_of(as.character(weeks)))
+  if_else(rowSums(!is.na(wk)) == 0, NA_real_, rowSums(wk, na.rm = TRUE))
+})
 
 cpue <- cpue_wide |>
   select(year, statsub, return, name) |>
@@ -166,7 +197,9 @@ cpue <- cpue_wide |>
 
 # Complete-case only: needs a real CPUE AND a known return to fit against.
 # curr_year rows drop out automatically (return is NA -- it's the forecast
-# target, not yet observed).
+# target, not yet observed). A subarea/period with zero interviews some
+# weeks still passes as a real (partial) period -- see CLAUDE.md's na.rm
+# note; not fixable by requiring full completeness (leaves too little data).
 cpue_minimal <- cpue |>
   filter(!if_any(c(return, cn_all_k, boat_trips), is.na)) |>
   select(year, period, cn_all_k, boat_trips, rch_cn_k, statsub, return)
@@ -181,7 +214,7 @@ classify_model <- function(predictor, response) {
 }
 
 build_model_formula <- function(model_form) {
-  # +0.0001 offset matches the search phase (fast_ols/retro_ols both fit on
+  # +0.0001 offset matches the search phase (combo_r2s/retro_ols both fit on
   # ln_cpue = log(cpue + 0.0001)) -- without it, any subarea/year with
   # genuinely zero kept Chinook (a real value, not missing data -- e.g. 123R
   # has had zero-catch years) produces log(0) = -Inf and lm() dies with
@@ -205,27 +238,6 @@ if (file.exists(SEASON_MODEL_PATH)) {
   SEASON_MODEL <- readRDS(SEASON_MODEL_PATH)
   
 } else {
-  
-  # ── Closed-form OLS: same math as lm(y ~ x), no formula/model-frame
-  #    overhead -- what makes fitting thousands of groups feasible ─────────
-  fast_ols <- function(x, y) {
-    ok <- is.finite(x) & is.finite(y)
-    x <- x[ok]; y <- y[ok]
-    n <- length(x)
-    if (n < 4) return(tibble(n = n, adj.r.squared = NA_real_, p.value = NA_real_))
-    mx <- mean(x); my <- mean(y)
-    sxx <- sum((x - mx)^2)
-    if (sxx == 0) return(tibble(n = n, adj.r.squared = NA_real_, p.value = NA_real_))
-    slope <- sum((x - mx) * (y - my)) / sxx
-    intercept <- my - slope * mx
-    resid <- y - (intercept + slope * x)
-    ss_res <- sum(resid^2); ss_tot <- sum((y - my)^2)
-    r2 <- 1 - ss_res / ss_tot
-    adj_r2 <- 1 - (1 - r2) * (n - 1) / (n - 2)
-    se_slope <- sqrt((ss_res / (n - 2)) / sxx)
-    p_val <- 2 * pt(-abs(slope / se_slope), df = n - 2)
-    tibble(n = n, adj.r.squared = adj_r2, p.value = p_val)
-  }
   
   # ── Genuine expanding-window retro test (Nick Brown's original approach,
   #    generalized to any combo/correction/form): only ever uses years <=
@@ -278,7 +290,7 @@ if (file.exists(SEASON_MODEL_PATH)) {
     map(~ cpue_minimal |>
           filter(statsub %in% .x) |>
           summarise(.by = c(year, return, period),
-                    across(c(cn_all_k, rch_cn_k, boat_trips), \(x) sum(x, na.rm = TRUE))) |>
+                    across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
           mutate(cpue = cn_all_k / boat_trips, rch_cpue = rch_cn_k / boat_trips) |>
           filter(!is.na(cpue), !is.nan(cpue))) |>
     keep(~ n_distinct(.x$year) >= MIN_N)
@@ -296,16 +308,17 @@ if (file.exists(SEASON_MODEL_PATH)) {
           group_by(group) |>
           filter(n() >= MIN_N))
   
-  combo_r2s <- combo_long |>
-    bind_rows(.id = "combo") |>
-    ungroup() |>
+  # Flattened once and reused below (PART 2 too) -- avoids recomputing the
+  # same bind_rows/ungroup on every reference.
+  combo_long_flat <- combo_long |> bind_rows(.id = "combo") |> ungroup()
+  
+  combo_r2s <- combo_long_flat |>
     summarise(.by = c(combo, period, predictor, response), n = n(),
               mx = mean(x), my = mean(y), sxx = sum((x - mx)^2),
               sxy = sum((x - mx) * (y - my)), ss_tot = sum((y - my)^2)) |>
     filter(n >= 4, sxx > 0) |>
     mutate(slope = sxy / sxx, intercept = my - slope * mx) |>
-    left_join(combo_long |> bind_rows(.id = "combo") |> ungroup(),
-              by = c("combo", "period", "predictor", "response")) |>
+    left_join(combo_long_flat, by = c("combo", "period", "predictor", "response")) |>
     mutate(fitted = intercept + slope * x, sq_resid = (y - fitted)^2) |>
     summarise(.by = c(combo, period, predictor, response, n, ss_tot, slope, sxx), ss_res = sum(sq_resid)) |>
     mutate(r2 = 1 - ss_res / ss_tot,
@@ -327,9 +340,7 @@ if (file.exists(SEASON_MODEL_PATH)) {
   # despite the wider search, that's useful confirmation, not an assumption
   # baked in ahead of time.
   cat("Running expanding-window retro test across every period x combo (slower -- no closed-form shortcut)...\n")
-  retro_r2s <- combo_long |>
-    bind_rows(.id = "combo") |>
-    ungroup() |>
+  retro_r2s <- combo_long_flat |>
     group_by(combo, period, predictor, response) |>
     group_modify(~ retro_ols(.x$x, .x$y, .x$return_natural, .x$year)) |>
     ungroup() |>
@@ -424,7 +435,7 @@ run_period_forecast <- function(period_label) {
   # predict() can hand back a proper prediction interval.
   series <- cpue |>
     filter(period == period_label, statsub %in% winning_subareas) |>
-    summarise(.by = year, across(c(cn_all_k, rch_cn_k, boat_trips), \(x) sum(x, na.rm = TRUE))) |>
+    summarise(.by = year, across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
     mutate(cpue = cn_all_k / boat_trips, rch_cpue = rch_cn_k / boat_trips,
            predictor_val = if (use_rch) rch_cpue else cpue) |>
     filter(is.finite(predictor_val)) |>
@@ -512,12 +523,12 @@ run_period_forecast <- function(period_label) {
 # "season-model retro MAPE" printed in its subtitle refer to the same period.
 
 results <- list(
-wk82only       = run_period_forecast("82"),
-wk83only       = run_period_forecast("83"),
-wk83Cum        = run_period_forecast("cum83"),
-wk84Cum        = run_period_forecast("cum84"),
-wk91Cum        = run_period_forecast("cum91"),
-wk92Cum        = run_period_forecast("cum92")
+  wk82only       = run_period_forecast("82"),
+  wk83only       = run_period_forecast("83"),
+  wk83Cum        = run_period_forecast("cum83"),
+  wk84Cum        = run_period_forecast("cum84"),
+  wk91Cum        = run_period_forecast("cum91"),
+  wk92Cum        = run_period_forecast("cum92")
 )
 
 # ── Post-season review table -- once curr_year's actual return is known,
@@ -543,14 +554,14 @@ post_season_review <- map_df(names(results), function(nm) {
 
 print(post_season_review)
 # ── Save each weekly forecast plot ──────────────────────────────────────
-
-
-ggsave(sprintf("figures/%d_wk82only_forecast.png", curr_year), results$wk82only$plot, width = 9, height = 6, dpi = 300)
-ggsave(sprintf("figures/%d_wk83only_forecast.png", curr_year), results$wk83only$plot, width = 9, height = 6, dpi = 300)
-ggsave(sprintf("figures/%d_wk83Cum_forecast.png",  curr_year), results$wk83Cum$plot,  width = 9, height = 6, dpi = 300)
-#ggsave(sprintf("figures/%d_wk84Cum_forecast.png",  curr_year), results$wk84Cum$plot,  width = 9, height = 6, dpi = 300)
-#ggsave(sprintf("figures/%d_wk91Cum_forecast.png",  curr_year), results$wk91Cum$plot,  width = 9, height = 6, dpi = 300)
-#ggsave(sprintf("figures/%d_wk92Cum_forecast.png",  curr_year), results$wk92Cum$plot,  width = 9, height = 6, dpi = 300)
+# Only saves periods with a real forecast (completeness guard passed) --
+# auto-progresses through the season instead of needing lines manually
+# commented/uncommented in as each milestone is reached.
+walk(names(results), function(nm) {
+  if (!is.null(results[[nm]]$forecast)) {
+    ggsave(sprintf("figures/%d_%s_forecast.png", curr_year, nm), results[[nm]]$plot, width = 9, height = 6, dpi = 300)
+  }
+})
 
 #adhoc changes to the plot before saving (in case I want to remove extra info)
 
@@ -590,7 +601,7 @@ retro_forecast <- function(subareas, correction, model_form, period_label,
   
   series <- cpue |>
     filter(period == period_label, statsub %in% subareas) |>
-    summarise(.by = year, across(c(cn_all_k, rch_cn_k, boat_trips), \(x) sum(x, na.rm = TRUE))) |>
+    summarise(.by = year, across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
     mutate(cpue = cn_all_k / boat_trips, rch_cpue = rch_cn_k / boat_trips,
            predictor_val = if (use_rch) rch_cpue else cpue) |>
     filter(is.finite(predictor_val)) |>
@@ -687,11 +698,12 @@ cat(sprintf(
 # collapsing to one forecast point.
 combo_subareas <- str_split(SEASON_MODEL$combo, "_")[[1]]
 combo_period   <- SEASON_MODEL$period
+combo_use_rch  <- SEASON_MODEL$correction == "corrected"
 
 cpue_trend <- cpue |>
   filter(period == combo_period, statsub %in% combo_subareas) |>
-  summarise(.by = year, across(c(cn_all_k, boat_trips), \(x) sum(x, na.rm = TRUE))) |>
-  mutate(cpue = cn_all_k / boat_trips) |>
+  summarise(.by = year, across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
+  mutate(cpue = if (combo_use_rch) rch_cn_k / boat_trips else cn_all_k / boat_trips) |>
   filter(is.finite(cpue)) |>
   arrange(year)
 
@@ -702,8 +714,51 @@ ggplot(cpue_trend, aes(x = year, y = cpue)) +
   geom_text_repel(aes(label = year), size = 3, min.segment.length = 0) +
   scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
   labs(
-    x = NULL, y = "CPUE (raw, pooled)",
-    title = paste0("Chinook raw CPUE trend — season model combo (",
+    x = NULL, y = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ", pooled)"),
+    title = paste0("Chinook CPUE trend — season model combo (",
                    str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
   ) +
+  theme_bw(base_size = 14)
+
+# Sampling-effort diagnostic: how many interviews each training year's CPUE
+# actually rests on. Not a "fix" -- flags the real open risk found during
+# review: every OLS fit above is unweighted, despite training-year trip
+# counts spanning roughly 3 (2012) to 178 -- a thin year gets the same
+# regression leverage as a well-sampled one. See CLAUDE.md's na.rm note.
+ggplot(cpue_trend, aes(x = year, y = boat_trips)) +
+  geom_col(fill = "#6a5acd") +
+  geom_text(aes(label = boat_trips), vjust = -0.3, size = 3) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+  labs(
+    x = NULL, y = "Interviewed boat trips",
+    title = paste0("Sampling effort by year — season model combo (",
+                   str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
+  ) +
+  theme_bw(base_size = 14)
+# CPUE across years AND individual stat-weeks (not collapsed to cum83) --
+# cpue_trend above shows one period's CPUE by year; this shows all 5 single
+# weeks (82/83/84/91/92) side by side, same subareas/correction as the
+# season model, to see whether within-season week-to-week movement looks
+# systematic or just noisy.
+cpue_by_week <- cpue |>
+  filter(period %in% c("82", "83", "84", "91", "92"), statsub %in% combo_subareas) |>
+  summarise(.by = c(year, period), across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
+  mutate(cpue = if (combo_use_rch) rch_cn_k / boat_trips else cn_all_k / boat_trips,
+         period = factor(period, levels = c("82", "83", "84", "91", "92"))) |>
+  filter(is.finite(cpue))
+
+
+
+# Same data as a year x week heatmap -- easier to spot a systematic
+# within-season pattern (e.g. CPUE consistently rising/falling week to
+# week) than the overlapping line plot above.
+ggplot(cpue_by_week, aes(x = year, y = cpue)) +
+  geom_line(colour = "#333333", linewidth = 0.7) +
+  geom_point(colour = "#333333", size = 1.5) +
+  facet_wrap(~ period, ncol = 1, labeller = labeller(period = ~ paste("Week", .))) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+  scale_colour_brewer(palette = "Dark2", name = "Stat week") +
+  labs(x = NULL, y = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ")"),
+       title = paste0("Weekly CPUE by year — season model combo (",
+                      str_replace_all(SEASON_MODEL$combo, "_", "+"), ")")) + 
   theme_bw(base_size = 14)
