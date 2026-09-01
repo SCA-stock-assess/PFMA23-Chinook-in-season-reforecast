@@ -785,16 +785,17 @@ ggplot(cpue_by_week, aes(x = year, y = period, fill = cpue)) +
   geom_tile(colour = "white", linewidth = 0.6) +
   scale_x_continuous(breaks = scales::breaks_pretty(n = 8), expand = c(0, 0)) +
   scale_y_discrete(labels = ~ paste("Week", .), expand = c(0, 0)) +
-  # Midpoint pinned to the data's own median (not the raw 0-max midpoint) --
-  # otherwise most tiles cluster near the low end of the CPUE range and the
-  # whole heatmap reads as a washed-out blend instead of distinct blue/red.
-  # Endpoint colours are ColorBrewer's RdBu poles -- a standard, tested
-  # diverging pair, rather than two arbitrary hex picks.
-  scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b",
-                       midpoint = median(cpue_by_week$cpue, na.rm = TRUE),
-                       name = "CPUE",
-                       guide = guide_colorbar(barheight = grid::unit(5, "cm"),
-                                              barwidth = grid::unit(0.4, "cm"))) +
+  # Sequential (single-hue) rather than diverging -- CPUE has no meaningful
+  # "zero point" to diverge around, just low-to-high magnitude, so shade
+  # depth alone should carry it: pale pink at the low end darkening to deep
+  # red at the high end. Still a continuous fill (cpue is numeric, not
+  # binned) -- scale_fill_gradient() interpolates smoothly between the two
+  # endpoints for every tile's exact value, same as any continuous scale.
+  # Endpoints are ColorBrewer's single-hue "Reds" poles.
+  scale_fill_gradient(low = "#fee5d9", high = "#a50f15",
+                      name = "CPUE",
+                      guide = guide_colorbar(barheight = grid::unit(5, "cm"),
+                                             barwidth = grid::unit(0.4, "cm"))) +
   labs(x = NULL, y = NULL,
        title = "Weekly CPUE by year",
        subtitle = paste0("Season model combo (", str_replace_all(SEASON_MODEL$combo, "_", "+"),
