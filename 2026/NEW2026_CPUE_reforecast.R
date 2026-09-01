@@ -643,22 +643,47 @@ retro_forecast <- function(subareas, correction, model_form, period_label,
   scored <- retro_preds |> filter(!is.na(return))
   mape <- mean(abs(scored$return - scored$prediction) / scored$return)
   rmse <- sqrt(mean((scored$return - scored$prediction)^2))
-  
-  fig <- ggplot(retro_preds, aes(year, prediction)) +
-    geom_point(colour = "red", size = 1.5) +
-    geom_line(colour = "red") +
-    geom_point(data = bs_cn |> filter(year %in% series$year), aes(y = Somass_term_adult_return)) +
-    geom_line(data = bs_cn |> filter(year %in% series$year), aes(y = Somass_term_adult_return)) +
-    labs(y = "Somass adult Chinook return", x = NULL,
-         title = paste0("Retrospective forecast — ", label),
+
+  # Predicted-vs-actual as paired columns rather than two overlapping lines --
+  # a reader has to eyeball vertical gaps on the line plot to judge accuracy;
+  # side-by-side bars for the same year make over/under-forecasts direct to
+  # compare at a glance.
+  bar_data <- scored |>
+    select(year, Actual = return, Predicted = prediction) |>
+    pivot_longer(cols = c(Actual, Predicted), names_to = "series", values_to = "value") |>
+    mutate(series = factor(series, levels = c("Actual", "Predicted")))
+
+  bar_fig <- ggplot(bar_data, aes(factor(year), value, fill = series)) +
+    geom_col(position = position_dodge(width = 0.75), width = 0.65) +
+    scale_fill_manual(values = c(Actual = "#333333", Predicted = "#c0392b"), name = NULL) +
+    scale_y_continuous(labels = scales::comma) +
+    labs(x = NULL, y = "Somass adult Chinook return",
+         title = paste0("Retrospective forecast vs. actual — ", label),
          subtitle = sprintf("retro MAPE = %.1f%%, RMSE = %s (n = %d years)",
                             mape * 100, scales::comma(round(rmse)), nrow(scored))) +
-    scale_y_continuous(labels = scales::comma) +
-    scale_x_continuous(breaks = seq(min(series$year), curr_year, by = 1)) +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-  
-  print(fig)
-  invisible(list(predictions = retro_preds, mape = mape, rmse = rmse, n = nrow(scored), plot = fig))
+    theme_bw(base_size = 14) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top")
+
+  # Same performance, read as year-by-year forecast error (% of actual) --
+  # signed so over- vs under-forecasting years are visually distinct, which
+  # the MAPE summary number alone can't show.
+  error_fig <- scored |>
+    mutate(pct_error = (prediction - return) / return,
+           direction = if_else(pct_error >= 0, "Over-forecast", "Under-forecast")) |>
+    ggplot(aes(factor(year), pct_error, fill = direction)) +
+    geom_col(width = 0.65) +
+    geom_hline(yintercept = 0, colour = "grey40") +
+    scale_fill_manual(values = c("Over-forecast" = "#c0392b", "Under-forecast" = "#2c6fbb"), name = NULL) +
+    scale_y_continuous(labels = scales::percent) +
+    labs(x = NULL, y = "Forecast error (% of actual return)",
+         title = paste0("Retrospective forecast error by year — ", label)) +
+    theme_bw(base_size = 14) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top")
+
+  print(bar_fig)
+  print(error_fig)
+  invisible(list(predictions = retro_preds, mape = mape, rmse = rmse, n = nrow(scored),
+                 plot = bar_fig, error_plot = error_fig))
 }
 
 # ── Retro-test the SEASON MODEL (the one actually chosen by PART 2) ────────
