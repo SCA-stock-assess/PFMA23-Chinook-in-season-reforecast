@@ -643,7 +643,7 @@ retro_forecast <- function(subareas, correction, model_form, period_label,
   scored <- retro_preds |> filter(!is.na(return))
   mape <- mean(abs(scored$return - scored$prediction) / scored$return)
   rmse <- sqrt(mean((scored$return - scored$prediction)^2))
-
+  
   # Predicted-vs-actual as paired columns rather than two overlapping lines --
   # a reader has to eyeball vertical gaps on the line plot to judge accuracy;
   # side-by-side bars for the same year make over/under-forecasts direct to
@@ -652,7 +652,7 @@ retro_forecast <- function(subareas, correction, model_form, period_label,
     select(year, Actual = return, Predicted = prediction) |>
     pivot_longer(cols = c(Actual, Predicted), names_to = "series", values_to = "value") |>
     mutate(series = factor(series, levels = c("Actual", "Predicted")))
-
+  
   bar_fig <- ggplot(bar_data, aes(factor(year), value, fill = series)) +
     geom_col(position = position_dodge(width = 0.75), width = 0.65) +
     scale_fill_manual(values = c(Actual = "#333333", Predicted = "#c0392b"), name = NULL) +
@@ -663,7 +663,7 @@ retro_forecast <- function(subareas, correction, model_form, period_label,
                             mape * 100, scales::comma(round(rmse)), nrow(scored))) +
     theme_bw(base_size = 14) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top")
-
+  
   # Same performance, read as year-by-year forecast error (% of actual) --
   # signed so over- vs under-forecasting years are visually distinct, which
   # the MAPE summary number alone can't show.
@@ -679,7 +679,7 @@ retro_forecast <- function(subareas, correction, model_form, period_label,
          title = paste0("Retrospective forecast error by year — ", label)) +
     theme_bw(base_size = 14) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top")
-
+  
   print(bar_fig)
   print(error_fig)
   invisible(list(predictions = retro_preds, mape = mape, rmse = rmse, n = nrow(scored),
@@ -716,6 +716,50 @@ cat(sprintf(
          "retro-validated selection\n  over picking a model by R^2 alone -- see PART 2's full leaderboard for",
          " every period/combo\n  compared this way, not just this one illustrative pair.\n"),
   season_retro$mape * 100, cum91_retro$mape * 100, SEASON_MODEL$adj.r.squared))
+##############################################Trend in CPUE
+# Use the season model's own selected combo + period (SECTION A's pick) —
+# this is exactly what run_period_forecast() builds as `predictor_val`
+# when use_rch = FALSE, just kept as a full year-by-year series instead of
+# collapsing to one forecast point.
+combo_subareas <- str_split(SEASON_MODEL$combo, "_")[[1]]
+combo_period   <- SEASON_MODEL$period
+combo_use_rch  <- SEASON_MODEL$correction == "corrected"
+
+cpue_trend <- cpue |>
+  filter(period == combo_period, statsub %in% combo_subareas) |>
+  summarise(.by = year, across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
+  mutate(cpue = if (combo_use_rch) rch_cn_k / boat_trips else cn_all_k / boat_trips) |>
+  filter(is.finite(cpue)) |>
+  arrange(year)
+
+ggplot(cpue_trend, aes(x = year, y = cpue)) +
+  geom_line(colour = "#333333", linewidth = 0.9) +
+  geom_point(colour = "#333333", size = 2) +
+  geom_point(data = filter(cpue_trend, year == curr_year), colour = "red", size = 3) +
+  geom_text_repel(aes(label = year), size = 3, min.segment.length = 0) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+  labs(
+    x = NULL, y = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ", pooled)"),
+    title = paste0("Chinook CPUE trend — season model combo (",
+                   str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
+  ) +
+  theme_bw(base_size = 14)
+
+# Sampling-effort diagnostic: how many interviews each training year's CPUE
+# actually rests on. Not a "fix" -- flags the real open risk found during
+# review: every OLS fit above is unweighted, despite training-year trip
+# counts spanning roughly 3 (2012) to 178 -- a thin year gets the same
+# regression leverage as a well-sampled one. See CLAUDE.md's na.rm note.
+ggplot(cpue_trend, aes(x = year, y = boat_trips)) +
+  geom_col(fill = "#6a5acd") +
+  geom_text(aes(label = boat_trips), vjust = -0.3, size = 3) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+  labs(
+    x = NULL, y = "Interviewed boat trips",
+    title = paste0("Sampling effort by year — season model combo (",
+                   str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
+  ) +
+  theme_bw(base_size = 14)
 ##############################################Trend in CPUE
 # Use the season model's own selected combo + period (SECTION A's pick) —
 # this is exactly what run_period_forecast() builds as `predictor_val`
