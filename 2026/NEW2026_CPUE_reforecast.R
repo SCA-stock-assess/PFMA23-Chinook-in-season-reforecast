@@ -777,19 +777,35 @@ cpue_by_week <- cpue |>
 
 # Same data as a genuine year x week heatmap -- easier to spot a systematic
 # within-season pattern (e.g. CPUE consistently rising/falling week to week)
-# than five stacked line facets, and takes far less vertical space.
+# than five stacked line facets, and takes far less vertical space. Title is
+# split into title + subtitle (rather than one long combo-name string) so it
+# doesn't get clipped in a narrow viewer -- see the 2026-09-01 report where
+# the single-line title ran off the plot area.
 ggplot(cpue_by_week, aes(x = year, y = period, fill = cpue)) +
-  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_tile(colour = "white", linewidth = 0.6) +
   scale_x_continuous(breaks = scales::breaks_pretty(n = 8), expand = c(0, 0)) +
-  scale_y_discrete(labels = ~ paste("Week", .)) +
+  scale_y_discrete(labels = ~ paste("Week", .), expand = c(0, 0)) +
   # Midpoint pinned to the data's own median (not the raw 0-max midpoint) --
   # otherwise most tiles cluster near the low end of the CPUE range and the
   # whole heatmap reads as a washed-out blend instead of distinct blue/red.
-  scale_fill_gradient2(low = "#2c6fbb", mid = "#f2f2f2", high = "#c0392b",
+  # Endpoint colours are ColorBrewer's RdBu poles -- a standard, tested
+  # diverging pair, rather than two arbitrary hex picks.
+  scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b",
                        midpoint = median(cpue_by_week$cpue, na.rm = TRUE),
-                       name = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ")")) +
+                       name = "CPUE",
+                       guide = guide_colorbar(barheight = grid::unit(5, "cm"),
+                                              barwidth = grid::unit(0.4, "cm"))) +
   labs(x = NULL, y = NULL,
-       title = paste0("Weekly CPUE by year — season model combo (",
-                      str_replace_all(SEASON_MODEL$combo, "_", "+"), ")")) +
+       title = "Weekly CPUE by year",
+       subtitle = paste0("Season model combo (", str_replace_all(SEASON_MODEL$combo, "_", "+"),
+                         "), ", if (combo_use_rch) "RCH-corrected" else "raw", " CPUE")) +
   theme_bw(base_size = 14) +
-  theme(panel.grid = element_blank())
+  theme(
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_text(colour = "grey20"),
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(colour = "grey30", size = 11),
+    legend.title = element_text(size = 11)
+  )
