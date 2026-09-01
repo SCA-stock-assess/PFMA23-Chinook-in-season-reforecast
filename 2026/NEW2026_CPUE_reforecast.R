@@ -760,34 +760,7 @@ ggplot(cpue_trend, aes(x = year, y = boat_trips)) +
                    str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
   ) +
   theme_bw(base_size = 14)
-##############################################Trend in CPUE
-# Use the season model's own selected combo + period (SECTION A's pick) —
-# this is exactly what run_period_forecast() builds as `predictor_val`
-# when use_rch = FALSE, just kept as a full year-by-year series instead of
-# collapsing to one forecast point.
-combo_subareas <- str_split(SEASON_MODEL$combo, "_")[[1]]
-combo_period   <- SEASON_MODEL$period
-combo_use_rch  <- SEASON_MODEL$correction == "corrected"
 
-cpue_trend <- cpue |>
-  filter(period == combo_period, statsub %in% combo_subareas) |>
-  summarise(.by = year, across(c(cn_all_k, rch_cn_k, boat_trips), sum_or_na)) |>
-  mutate(cpue = if (combo_use_rch) rch_cn_k / boat_trips else cn_all_k / boat_trips) |>
-  filter(is.finite(cpue)) |>
-  arrange(year)
-
-ggplot(cpue_trend, aes(x = year, y = cpue)) +
-  geom_line(colour = "#333333", linewidth = 0.9) +
-  geom_point(colour = "#333333", size = 2) +
-  geom_point(data = filter(cpue_trend, year == curr_year), colour = "red", size = 3) +
-  geom_text_repel(aes(label = year), size = 3, min.segment.length = 0) +
-  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
-  labs(
-    x = NULL, y = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ", pooled)"),
-    title = paste0("Chinook CPUE trend — season model combo (",
-                   str_replace_all(SEASON_MODEL$combo, "_", "+"), "), period ", combo_period)
-  ) +
-  theme_bw(base_size = 14)
 
 # Sampling-effort diagnostic: how many interviews each training year's CPUE
 # actually rests on. Not a "fix" -- flags the real open risk found during
@@ -817,17 +790,37 @@ cpue_by_week <- cpue |>
   filter(is.finite(cpue))
 
 
-
-# Same data as a year x week heatmap -- easier to spot a systematic
-# within-season pattern (e.g. CPUE consistently rising/falling week to
-# week) than the overlapping line plot above.
-ggplot(cpue_by_week, aes(x = year, y = cpue)) +
-  geom_line(colour = "#333333", linewidth = 0.7) +
-  geom_point(colour = "#333333", size = 1.5) +
-  facet_wrap(~ period, ncol = 1, labeller = labeller(period = ~ paste("Week", .))) +
-  scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
-  scale_colour_brewer(palette = "Dark2", name = "Stat week") +
-  labs(x = NULL, y = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ")"),
-       title = paste0("Weekly CPUE by year — season model combo (",
-                      str_replace_all(SEASON_MODEL$combo, "_", "+"), ")")) + 
-  theme_bw(base_size = 14)
+# Same data as a genuine year x week heatmap -- easier to spot a systematic
+# within-season pattern (e.g. CPUE consistently rising/falling week to week)
+# than five stacked line facets, and takes far less vertical space. Title is
+# split into title + subtitle (rather than one long combo-name string) so it
+# doesn't get clipped in a narrow viewer -- see the 2026-09-01 report where
+# the single-line title ran off the plot area.
+ggplot(cpue_by_week, aes(x = year, y = period, fill = cpue)) +
+  geom_tile(colour = "white", linewidth = 0.6) +
+  scale_x_continuous(breaks = scales::breaks_pretty(n = 8), expand = c(0, 0)) +
+  scale_y_discrete(labels = ~ paste("Week", .), expand = c(0, 0)) +
+  # Midpoint pinned to the data's own median (not the raw 0-max midpoint) --
+  # otherwise most tiles cluster near the low end of the CPUE range and the
+  # whole heatmap reads as a washed-out blend instead of distinct blue/red.
+  # Endpoint colours are ColorBrewer's RdBu poles -- a standard, tested
+  # diverging pair, rather than two arbitrary hex picks.
+  scale_fill_gradient2(low = "#2166ac", mid = "#f7f7f7", high = "#b2182b",
+                       midpoint = median(cpue_by_week$cpue, na.rm = TRUE),
+                       name = "CPUE",
+                       guide = guide_colorbar(barheight = grid::unit(5, "cm"),
+                                              barwidth = grid::unit(0.4, "cm"))) +
+  labs(x = NULL, y = NULL,
+       title = "Weekly CPUE by year",
+       subtitle = paste0("Season model combo (", str_replace_all(SEASON_MODEL$combo, "_", "+"),
+                         "), ", if (combo_use_rch) "RCH-corrected" else "raw", " CPUE")) +
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_text(colour = "grey20"),
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(colour = "grey30", size = 11),
+    legend.title = element_text(size = 11)
+  )
