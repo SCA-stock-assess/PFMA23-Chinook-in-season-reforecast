@@ -782,8 +782,8 @@ ggplot(cpue_by_week, aes(x = year, y = period, fill = cpue)) +
   geom_tile(colour = "white", linewidth = 0.4) +
   scale_x_continuous(breaks = scales::breaks_pretty(n = 8), expand = c(0, 0)) +
   scale_y_discrete(labels = ~ paste("Week", .)) +
-  scale_fill_gradient(low = "#2c6fbb", high = "#c0392b",
-                      name = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ")")) +
+  scale_fill_gradientn(colours = c("#2c6fbb", "#f2f2f2", "#c0392b"),
+                       name = paste0("CPUE (", if (combo_use_rch) "RCH-corrected" else "raw", ")")) +
   labs(x = NULL, y = NULL,
        title = paste0("Weekly CPUE by year — season model combo (",
                       str_replace_all(SEASON_MODEL$combo, "_", "+"), ")")) +
